@@ -172,12 +172,17 @@ fn consider(
     jobs: &mut Vec<Job>,
     skips: &mut Vec<Skip>,
 ) {
-    let ext = src
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    if ext.is_empty() || !exts.contains(&ext) {
+    // Matched against the extension, or against the whole filename so that
+    // extensionless build files like `Dockerfile` and `Makefile` are reachable
+    // through the same `--ext` list.
+    let lower = |s: Option<&std::ffi::OsStr>| {
+        s.and_then(|v| v.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+    };
+    let ext = lower(src.extension());
+    let name = lower(src.file_name());
+    if !exts.contains(&ext) && !exts.contains(&name) {
         skips.push(Skip::UnsupportedExt(src.to_path_buf()));
         return;
     }
@@ -309,6 +314,67 @@ mod tests {
         assert_eq!(jobs.len(), 1);
         assert_eq!(skips.len(), 2);
         assert!(skips.iter().all(|s| matches!(s, Skip::UnsupportedExt(_))));
+    }
+
+    #[test]
+    fn extensionless_build_files_match_on_their_filename() {
+        let root = tree(
+            "named",
+            &[
+                ("Dockerfile", "FROM x"),
+                ("Makefile", "all:"),
+                ("LICENSE", "MIT"),
+            ],
+        );
+        let mut e = exts();
+        e.insert("dockerfile".into());
+        e.insert("makefile".into());
+        let (jobs, _) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &e,
+            1 << 20,
+            Descend::SkipVendor,
+        );
+        let names: Vec<_> = jobs
+            .iter()
+            .map(|j| j.src.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["Dockerfile", "Makefile"]);
+        assert!(
+            !names.contains(&"LICENSE".to_string()),
+            "LICENSE is not in the set"
+        );
+    }
+
+    #[test]
+    fn filename_matching_is_case_insensitive() {
+        let root = tree("namedcase", &[("DOCKERFILE", "FROM x")]);
+        let mut e = exts();
+        e.insert("dockerfile".into());
+        let (jobs, _) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &e,
+            1 << 20,
+            Descend::SkipVendor,
+        );
+        assert_eq!(jobs.len(), 1);
+    }
+
+    #[test]
+    fn a_dotted_dockerfile_still_matches_on_its_extension() {
+        let root = tree("dotted", &[("debug.Dockerfile", "FROM x")]);
+        let mut e = exts();
+        e.insert("dockerfile".into());
+        let (jobs, _) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &e,
+            1 << 20,
+            Descend::SkipVendor,
+        );
+        assert_eq!(jobs.len(), 1);
     }
 
     #[test]

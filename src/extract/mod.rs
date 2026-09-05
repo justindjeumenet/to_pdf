@@ -13,14 +13,18 @@ use std::path::Path;
 /// Deliberately excluded: binary formats (`png`, `svg`, `pdf`, `zip`) and bulk
 /// data (`jsonl`, `lock` files), which either cannot be typeset as text or
 /// produce enormous PDFs nobody reads. Pass `--ext` to include them anyway.
+///
+/// Entries are matched against a file's extension *or* its whole filename, so
+/// `dockerfile` here catches both `Dockerfile` and `debug.Dockerfile`.
 #[rustfmt::skip]
 pub const DEFAULT_EXTS: &[&str] = &[
-    "c",    "cc",   "cfg",  "cjs",  "cpp",  "cs",   "css",  "cts",
-    "epub", "go",   "h",    "hpp",  "htm",  "html", "ini",  "java",
-    "js",   "json", "jsx",  "kt",   "lua",  "markdown",     "md",
-    "mjs",  "mts",  "php",  "py",   "qmd",  "rb",   "rs",   "rst",
-    "scss", "sh",   "sql",  "swift","toml", "ts",   "tsx",  "txt",
-    "xml",  "yaml", "yml",
+    "c",     "cc",    "cfg",   "cjs",   "cpp",   "cs",    "css",
+    "csv",   "cts",   "dockerfile",     "epub",  "go",    "h",
+    "hpp",   "htm",   "html",  "in",    "ini",   "java",  "js",
+    "json",  "jsx",   "kt",    "lua",   "makefile",       "markdown",
+    "md",    "mjs",   "mts",   "php",   "py",    "qmd",   "rb",
+    "rs",    "rst",   "scss",  "sh",    "sql",   "swift", "toml",
+    "ts",    "tsx",   "txt",   "xml",   "yaml",  "yml",
 ];
 
 /// Extract `bytes` according to `path`'s extension. Anything unrecognised is

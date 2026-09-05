@@ -4,7 +4,7 @@ Convert a source file — or a directory tree of thousands of files — into PDF
 that are as small as a correct PDF can be, without altering the source text.
 
 ```
-inspect_ai (3,682 files)   43 MB  →  19 MB   (44% of source, 1.4s)
+inspect_ai (3,702 files)   43 MB  →  19 MB   (44% of source, 1.4s)
 3,000-file synthetic tree  34 MB  →  4.7 MB  (14% of source, 0.33s)
 this repo's src/           82 KB  →   45 KB  (55% of source)
 ```
@@ -64,6 +64,12 @@ to_pdf api web -o out
 `.rst` `.scss` `.txt` `.xml`
 
 **Configuration** — `.cfg` `.ini` `.json` `.toml` `.yaml` `.yml`
+
+**Build and data** — `Dockerfile` `Makefile` `.csv` `.in`
+
+Entries match a file's extension *or* its whole filename, case-insensitively,
+so `dockerfile` covers both a bare `Dockerfile` and `debug.Dockerfile`. A
+suffixed `Dockerfile.prod` is not matched — its extension is `prod`.
 
 Binary formats (`.png`, `.svg`, `.pdf`, `.zip`) and bulk data (`.jsonl`, lock
 files) are deliberately excluded — they either cannot be typeset as text or
@@ -196,7 +202,7 @@ target machine needs nothing but Rust.
 ## Development
 
 ```bash
-cargo test                                # 133 tests
+cargo test                                # 136 tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
