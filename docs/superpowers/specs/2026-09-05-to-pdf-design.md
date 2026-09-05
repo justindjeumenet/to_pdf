@@ -105,7 +105,10 @@ is issued once:
     BT
     /F0 8.5 Tf
     10 TL
-    36 <first_baseline + leading> Td
+    36 <y0> Td
+
+where `first_baseline = page_height - margin - font_size` and
+`y0 = first_baseline + leading`.
 
 Every text line is then a single operator:
 
@@ -166,7 +169,10 @@ Wrapping must not shift the source's own columns, because an added
 indent is indistinguishable from real Python indentation.
 
 A 2-column left gutter is therefore reserved for the whole file whenever
-any line in that file wraps. Normal lines get two spaces in the gutter;
+any line in that file wraps, or whenever `--line-numbers` is on. The
+gutter is carved out of the total column count, not added to it: at the
+default 102 columns, an active gutter leaves 100 columns of source text.
+Files that need no gutter keep all 102. Normal lines get two spaces in the gutter;
 continuation lines get `» ` (WinAnsi 0xBB). Source column 0 is always at
 the same page x-coordinate on every line, wrapped or not.
 
@@ -237,12 +243,29 @@ Output naming: `foo.rs` becomes `foo.rs.pdf`. The source extension is
 retained so that `foo.rs` and `foo.go` in one directory do not collide on
 `foo.pdf`.
 
+`--out` and `--in-place` are mutually exclusive; supplying both is a
+usage error. Under `--out`, each input root is mapped to a subdirectory
+named for that root's final path component, so two roots that both
+contain `src/main.rs` cannot collide:
+
+    to_pdf api/ web/ -o out/
+      api/src/main.rs -> out/api/src/main.rs.pdf
+      web/src/main.rs -> out/web/src/main.rs.pdf
+
+A bare file input maps to `<out>/<filename>.pdf` with no subdirectory.
+Intermediate output directories are created as needed. An existing output
+file is overwritten.
+
 Page defaults: A4 (595.28 x 841.89 pt), 36 pt margins, Courier 8.5 pt with
 10 pt leading, giving 102 columns by 76 lines. `--dense` gives 124 by 96
 and cuts page count by roughly 25%, which cuts per-page overhead with it.
+`--dense` is shorthand for a font size and leading pair; an explicit
+`--font-size` given alongside it wins, and leading is then derived as
+`font_size * 1.18` rounded to two decimals.
 
 No page header or footer is emitted by default. `--page-numbers` adds a
-centred footer number outside the text block.
+centred footer number in its own `BT`/`ET` block after the body block, so
+it never perturbs the body's text-positioning state.
 
 ### 7.2 Concurrency
 
