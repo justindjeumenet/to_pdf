@@ -40,6 +40,7 @@ pub fn run(cli: &Cli) -> Summary {
         cli.out_mode(),
         &exts,
         cli.max_file_size.saturating_mul(1024 * 1024),
+        cli.descend(),
     );
 
     let mut summary = Summary {
@@ -141,6 +142,10 @@ impl Summary {
                     Skip::TooLarge(p, n) => {
                         eprintln!("skip  {}: {n} bytes exceeds --max-file-size", p.display())
                     }
+                    Skip::IgnoredDir(p) => eprintln!(
+                        "skip  {}/: ignored directory (--no-ignore to include)",
+                        p.display()
+                    ),
                     Skip::Unreadable(p, e) => eprintln!("skip  {}: {e}", p.display()),
                 }
             }
@@ -156,10 +161,22 @@ impl Summary {
         } else {
             0.0
         };
+        // Ignored directories are one entry each, not one per file inside, so
+        // folding them into the file count would be misleading.
+        let ignored_dirs = self
+            .skipped
+            .iter()
+            .filter(|s| matches!(s, Skip::IgnoredDir(_)))
+            .count();
+        let dirs = if ignored_dirs > 0 {
+            format!(", {ignored_dirs} dirs ignored")
+        } else {
+            String::new()
+        };
         println!(
-            "{} converted, {} skipped, {} failed — {} in, {} out ({ratio:.0}% of source)",
+            "{} converted, {} skipped{dirs}, {} failed — {} in, {} out ({ratio:.0}% of source)",
             self.converted,
-            self.skipped.len(),
+            self.skipped.len() - ignored_dirs,
             self.failed.len(),
             human(self.bytes_in),
             human(self.bytes_out),

@@ -13,8 +13,33 @@ pub struct Job {
 #[derive(Debug, Clone)]
 pub enum Skip {
     UnsupportedExt(PathBuf),
+    /// A directory not descended into. One entry per directory, not per file.
+    IgnoredDir(PathBuf),
     TooLarge(PathBuf, u64),
     Unreadable(PathBuf, String),
+}
+
+/// Whether the walk avoids hidden and vendor directories.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Descend {
+    /// Skip hidden directories and the well-known dependency and build trees.
+    SkipVendor,
+    /// Walk everything, including `.git` and `node_modules`.
+    All,
+}
+
+/// Directory names skipped under [`Descend::SkipVendor`]. Hidden directories —
+/// any name starting with `.` — are skipped too, which covers `.git`, `.venv`,
+/// `.idea`, `.tox`, `.next` and friends without enumerating them.
+#[rustfmt::skip]
+const VENDOR_DIRS: &[&str] = &[
+    "__pycache__", "bower_components", "build", "coverage", "dist",
+    "node_modules", "site-packages", "target", "vendor", "venv",
+];
+
+fn is_ignored_dir(name: &std::ffi::OsStr) -> bool {
+    name.to_str()
+        .is_some_and(|n| n.starts_with('.') || VENDOR_DIRS.contains(&n))
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -41,6 +66,7 @@ pub fn discover(
     out: OutMode<'_>,
     exts: &BTreeSet<String>,
     max_bytes: u64,
+    descend: Descend,
 ) -> (Vec<Job>, Vec<Skip>) {
     let mut jobs = Vec::new();
     let mut skips = Vec::new();
@@ -72,6 +98,7 @@ pub fn discover(
                 prefix.as_deref(),
                 exts,
                 max_bytes,
+                descend,
                 &mut jobs,
                 &mut skips,
             );
@@ -95,6 +122,7 @@ fn walk_dir(
     prefix: Option<&Path>,
     exts: &BTreeSet<String>,
     max_bytes: u64,
+    descend: Descend,
     jobs: &mut Vec<Job>,
     skips: &mut Vec<Skip>,
 ) {
@@ -116,7 +144,13 @@ fn walk_dir(
         }
         let path = e.path();
         if ft.is_dir() {
-            walk_dir(&path, root, prefix, exts, max_bytes, jobs, skips);
+            // The ignore list applies to directories found during the walk, not
+            // to a root the user named explicitly.
+            if descend == Descend::SkipVendor && is_ignored_dir(&e.file_name()) {
+                skips.push(Skip::IgnoredDir(path));
+                continue;
+            }
+            walk_dir(&path, root, prefix, exts, max_bytes, descend, jobs, skips);
         } else if ft.is_file() {
             let dst = match prefix {
                 None => with_pdf(&path),
@@ -187,6 +221,7 @@ mod tests {
             OutMode::Dir(&out),
             &exts(),
             1 << 20,
+            Descend::SkipVendor,
         );
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].dst, out.join("main.rs.pdf"));
@@ -196,7 +231,13 @@ mod tests {
     fn the_source_extension_is_kept_so_siblings_cannot_collide() {
         let root = tree("collide", &[("a/x.rs", "1"), ("a/x.py", "2")]);
         let out = root.join("out");
-        let (jobs, _) = discover(&[root.join("a")], OutMode::Dir(&out), &exts(), 1 << 20);
+        let (jobs, _) = discover(
+            &[root.join("a")],
+            OutMode::Dir(&out),
+            &exts(),
+            1 << 20,
+            Descend::SkipVendor,
+        );
         let names: Vec<_> = jobs
             .iter()
             .map(|j| j.dst.file_name().unwrap().to_owned())
@@ -212,7 +253,13 @@ mod tests {
             &[("s/a.rs", "1"), ("s/b/c.rs", "2"), ("s/b/d/e.rs", "3")],
         );
         let out = root.join("out");
-        let (jobs, _) = discover(&[root.join("s")], OutMode::Dir(&out), &exts(), 1 << 20);
+        let (jobs, _) = discover(
+            &[root.join("s")],
+            OutMode::Dir(&out),
+            &exts(),
+            1 << 20,
+            Descend::SkipVendor,
+        );
         assert_eq!(jobs.len(), 3);
         assert_eq!(jobs[2].dst, out.join("s/b/d/e.rs.pdf"));
     }
@@ -229,6 +276,7 @@ mod tests {
             OutMode::Dir(&out),
             &exts(),
             1 << 20,
+            Descend::SkipVendor,
         );
         let dsts: Vec<_> = jobs.iter().map(|j| j.dst.clone()).collect();
         assert!(dsts.contains(&out.join("api/src/main.rs.pdf")));
@@ -243,6 +291,7 @@ mod tests {
             OutMode::InPlace,
             &exts(),
             1 << 20,
+            Descend::SkipVendor,
         );
         assert_eq!(jobs[0].dst, root.join("a.rs.pdf"));
     }
@@ -255,6 +304,7 @@ mod tests {
             OutMode::InPlace,
             &exts(),
             1 << 20,
+            Descend::SkipVendor,
         );
         assert_eq!(jobs.len(), 1);
         assert_eq!(skips.len(), 2);
@@ -269,6 +319,7 @@ mod tests {
             OutMode::InPlace,
             &exts(),
             1 << 20,
+            Descend::SkipVendor,
         );
         assert_eq!(jobs.len(), 1);
     }
@@ -276,7 +327,13 @@ mod tests {
     #[test]
     fn oversized_files_are_skipped_and_reported() {
         let root = tree("big", &[("a.rs", "0123456789")]);
-        let (jobs, skips) = discover(std::slice::from_ref(&root), OutMode::InPlace, &exts(), 5);
+        let (jobs, skips) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &exts(),
+            5,
+            Descend::SkipVendor,
+        );
         assert!(jobs.is_empty());
         assert!(matches!(skips[0], Skip::TooLarge(_, 10)));
     }
@@ -289,12 +346,14 @@ mod tests {
             OutMode::InPlace,
             &exts(),
             1 << 20,
+            Descend::SkipVendor,
         );
         let (b, _) = discover(
             std::slice::from_ref(&root),
             OutMode::InPlace,
             &exts(),
             1 << 20,
+            Descend::SkipVendor,
         );
         assert_eq!(a, b);
         let srcs: Vec<_> = a.iter().map(|j| j.src.clone()).collect();
@@ -304,9 +363,103 @@ mod tests {
     }
 
     #[test]
+    fn hidden_directories_are_not_descended_into() {
+        let root = tree(
+            "hidden",
+            &[
+                ("a.rs", "1"),
+                (".git/hooks/x.rs", "2"),
+                (".venv/lib/y.py", "3"),
+                (".idea/z.rs", "4"),
+            ],
+        );
+        let (jobs, skips) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &exts(),
+            1 << 20,
+            Descend::SkipVendor,
+        );
+        assert_eq!(jobs.len(), 1, "only a.rs should be found, got {jobs:?}");
+        assert_eq!(jobs[0].src, root.join("a.rs"));
+        assert_eq!(
+            skips
+                .iter()
+                .filter(|s| matches!(s, Skip::IgnoredDir(_)))
+                .count(),
+            3
+        );
+    }
+
+    #[test]
+    fn vendor_directories_are_not_descended_into() {
+        let root = tree(
+            "vendor",
+            &[
+                ("a.rs", "1"),
+                ("node_modules/pkg/index.js", "2"),
+                ("__pycache__/m.py", "3"),
+                ("target/debug/build.rs", "4"),
+                ("dist/bundle.js", "5"),
+            ],
+        );
+        let mut e = exts();
+        e.insert("js".into());
+        let (jobs, _) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &e,
+            1 << 20,
+            Descend::SkipVendor,
+        );
+        assert_eq!(jobs.len(), 1, "found: {jobs:?}");
+    }
+
+    #[test]
+    fn descend_all_walks_everything() {
+        let root = tree(
+            "noignore",
+            &[
+                ("a.rs", "1"),
+                ("node_modules/b.rs", "2"),
+                (".git/c.rs", "3"),
+            ],
+        );
+        let (jobs, _) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &exts(),
+            1 << 20,
+            Descend::All,
+        );
+        assert_eq!(jobs.len(), 3);
+    }
+
+    #[test]
+    fn an_explicitly_passed_ignored_directory_is_still_walked() {
+        // Naming .git as a root is an explicit instruction; the ignore list
+        // applies only to directories discovered during the walk.
+        let root = tree("explicit", &[(".git/hooks/x.rs", "1")]);
+        let (jobs, _) = discover(
+            &[root.join(".git")],
+            OutMode::InPlace,
+            &exts(),
+            1 << 20,
+            Descend::SkipVendor,
+        );
+        assert_eq!(jobs.len(), 1);
+    }
+
+    #[test]
     fn an_unreadable_root_is_reported_not_panicked() {
         let missing = std::env::temp_dir().join("to_pdf_walk_nope_does_not_exist");
-        let (jobs, skips) = discover(&[missing], OutMode::InPlace, &exts(), 1 << 20);
+        let (jobs, skips) = discover(
+            &[missing],
+            OutMode::InPlace,
+            &exts(),
+            1 << 20,
+            Descend::SkipVendor,
+        );
         assert!(jobs.is_empty());
         assert!(matches!(skips[0], Skip::Unreadable(_, _)));
     }

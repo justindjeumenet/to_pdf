@@ -7,9 +7,20 @@ pub mod plain;
 
 use std::path::Path;
 
-/// Extensions converted when `--ext` is not given.
+/// Extensions converted when `--ext` is not given. Kept sorted so the set is
+/// easy to scan and diff; a test enforces both sorting and uniqueness.
+///
+/// Deliberately excluded: binary formats (`png`, `svg`, `pdf`, `zip`) and bulk
+/// data (`jsonl`, `lock` files), which either cannot be typeset as text or
+/// produce enormous PDFs nobody reads. Pass `--ext` to include them anyway.
+#[rustfmt::skip]
 pub const DEFAULT_EXTS: &[&str] = &[
-    "js", "ts", "go", "rs", "py", "txt", "md", "markdown", "html", "epub",
+    "c",    "cc",   "cfg",  "cjs",  "cpp",  "cs",   "css",  "cts",
+    "epub", "go",   "h",    "hpp",  "htm",  "html", "ini",  "java",
+    "js",   "json", "jsx",  "kt",   "lua",  "markdown",     "md",
+    "mjs",  "mts",  "php",  "py",   "qmd",  "rb",   "rs",   "rst",
+    "scss", "sh",   "sql",  "swift","toml", "ts",   "tsx",  "txt",
+    "xml",  "yaml", "yml",
 ];
 
 /// Extract `bytes` according to `path`'s extension. Anything unrecognised is
@@ -21,7 +32,7 @@ pub fn extract(path: &Path, bytes: &[u8]) -> Result<Vec<String>, String> {
         .unwrap_or_default()
         .to_ascii_lowercase();
     match ext.as_str() {
-        "html" => Ok(html::extract(bytes)),
+        "html" | "htm" => Ok(html::extract(bytes)),
         "epub" => epub::extract(bytes),
         _ => Ok(plain::extract(bytes)),
     }
@@ -45,12 +56,43 @@ mod tests {
     }
 
     #[test]
-    fn default_extension_set_matches_the_spec() {
+    fn default_extension_set_covers_the_common_source_families() {
+        for e in [
+            // the originally specified ten
+            "js", "ts", "go", "rs", "py", "txt", "md", "markdown", "html", "epub",
+            // siblings that were silently missed
+            "jsx", "tsx", "mjs", "cjs", "mts", "cts", "htm", "qmd", "rst", "css", "scss", "json",
+            "yaml", "yml", "toml", "ini", "cfg", "sh", "sql", "xml", "lua", "rb", "java", "c", "h",
+            "cpp", "hpp", "cs", "php", "swift", "kt",
+        ] {
+            assert!(DEFAULT_EXTS.contains(&e), "missing default extension: {e}");
+        }
+    }
+
+    #[test]
+    fn default_extension_set_is_sorted_and_free_of_duplicates() {
+        let mut v = DEFAULT_EXTS.to_vec();
+        v.sort_unstable();
+        v.dedup();
         assert_eq!(
-            DEFAULT_EXTS,
-            [
-                "js", "ts", "go", "rs", "py", "txt", "md", "markdown", "html", "epub"
-            ]
+            v.len(),
+            DEFAULT_EXTS.len(),
+            "duplicate entry in DEFAULT_EXTS"
         );
+        assert_eq!(v, DEFAULT_EXTS.to_vec(), "DEFAULT_EXTS must stay sorted");
+    }
+
+    #[test]
+    fn binary_and_data_formats_are_never_defaults() {
+        for e in [
+            "png", "jpg", "gif", "svg", "pdf", "zip", "jsonl", "eval", "so", "dylib",
+        ] {
+            assert!(!DEFAULT_EXTS.contains(&e), "{e} must not be a default");
+        }
+    }
+
+    #[test]
+    fn htm_dispatches_to_the_html_extractor() {
+        assert_eq!(extract(Path::new("a.htm"), b"<p>x</p>").unwrap(), vec!["x"]);
     }
 }

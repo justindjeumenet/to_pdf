@@ -4,7 +4,7 @@ use crate::extract::DEFAULT_EXTS;
 use crate::layout::Geometry;
 use crate::pdf::PdfOptions;
 use crate::pdf::encode::Unmappable;
-use crate::walk::OutMode;
+use crate::walk::{Descend, OutMode};
 use clap::{Parser, ValueEnum};
 use std::collections::BTreeSet;
 use std::path::PathBuf;
@@ -77,6 +77,10 @@ pub struct Cli {
     #[arg(long, value_name = "LIST", value_delimiter = ',')]
     pub ext: Option<Vec<String>>,
 
+    /// Descend into hidden and vendor directories (.git, node_modules, target...).
+    #[arg(long)]
+    pub no_ignore: bool,
+
     /// Skip inputs larger than this, in megabytes.
     #[arg(long, value_name = "MB", default_value_t = 64)]
     pub max_file_size: u64,
@@ -147,6 +151,14 @@ impl Cli {
             OutMode::InPlace
         } else {
             OutMode::Dir(&self.out)
+        }
+    }
+
+    pub fn descend(&self) -> Descend {
+        if self.no_ignore {
+            Descend::All
+        } else {
+            Descend::SkipVendor
         }
     }
 

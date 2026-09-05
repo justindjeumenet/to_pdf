@@ -4,8 +4,9 @@ Convert a source file — or a directory tree of thousands of files — into PDF
 that are as small as a correct PDF can be, without altering the source text.
 
 ```
-3,000-file project   34 MB  →  4.7 MB   (14% of source, 0.33s)
-this repo's src/     78 KB  →   43 KB   (55% of source)
+inspect_ai (3,682 files)   43 MB  →  19 MB   (44% of source, 1.4s)
+3,000-file synthetic tree  34 MB  →  4.7 MB  (14% of source, 0.33s)
+this repo's src/           82 KB  →   45 KB  (55% of source)
 ```
 
 Two rules drive every design decision:
@@ -55,14 +56,38 @@ to_pdf api web -o out
 
 ### Formats
 
-`.js` `.ts` `.go` `.rs` `.py` `.txt` `.md` `.markdown` `.html` `.epub`
+**Code** — `.c` `.cc` `.cjs` `.cpp` `.cs` `.cts` `.go` `.h` `.hpp` `.java`
+`.js` `.jsx` `.kt` `.lua` `.mjs` `.mts` `.php` `.py` `.rb` `.rs` `.sh` `.sql`
+`.swift` `.ts` `.tsx`
 
-Anything else is skipped (`-v` lists what was skipped and why). Override the
-set with `--ext`:
+**Markup and prose** — `.css` `.epub` `.htm` `.html` `.markdown` `.md` `.qmd`
+`.rst` `.scss` `.txt` `.xml`
+
+**Configuration** — `.cfg` `.ini` `.json` `.toml` `.yaml` `.yml`
+
+Binary formats (`.png`, `.svg`, `.pdf`, `.zip`) and bulk data (`.jsonl`, lock
+files) are deliberately excluded — they either cannot be typeset as text or
+produce enormous PDFs nobody reads. `-v` lists everything skipped and why.
+
+`--ext` **replaces** the default set rather than adding to it, so list
+everything you want:
 
 ```bash
-to_pdf ~/code --ext rs,toml,yaml -o out
+to_pdf ~/code --ext rs,toml,yaml,csv -o out
 ```
+
+### Ignored directories
+
+By default the walk does not descend into hidden directories (any name starting
+with `.`, which covers `.git`, `.venv`, `.idea`, `.tox`, `.next`) or into
+`node_modules`, `__pycache__`, `target`, `dist`, `build`, `vendor`, `venv`,
+`coverage`, `site-packages`, and `bower_components`.
+
+Without this, `to_pdf ~/myproject` on a JavaScript project would try to convert
+every vendored file in `node_modules`. Pass `--no-ignore` to walk everything.
+
+Naming an ignored directory explicitly still works — the rule applies only to
+directories found during the walk, so `to_pdf .git` does what you asked.
 
 - **Code and text** are reproduced verbatim — see *Fidelity* below.
 - **Markdown is treated as source, not rendered.** `# Title` stays `# Title`.
@@ -87,6 +112,7 @@ to_pdf ~/code --ext rs,toml,yaml -o out
 | `--page-numbers` | off | |
 | `--on-unmappable <M>` | `escape` | `escape` \| `replace` \| `fail` — see below. |
 | `--ext <LIST>` | see above | Comma-separated; replaces the default set. |
+| `--no-ignore` | | Descend into hidden and vendor directories too. |
 | `--max-file-size <MB>` | `64` | Larger inputs are skipped, not attempted. |
 | `--dry-run` | | |
 | `--fail-fast` | | Stop at the first failure instead of collecting them. |
@@ -170,7 +196,7 @@ target machine needs nothing but Rust.
 ## Development
 
 ```bash
-cargo test                                # 126 tests
+cargo test                                # 133 tests
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 ```
