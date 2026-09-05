@@ -25,7 +25,11 @@ pub enum UnmappableArg {
 }
 
 #[derive(Parser, Debug)]
-#[command(name = "to_pdf", about = "Convert source files and trees to very small PDFs", version)]
+#[command(
+    name = "to_pdf",
+    about = "Convert source files and trees to very small PDFs",
+    version
+)]
 pub struct Cli {
     /// Files or directories to convert.
     #[arg(required = true)]
@@ -105,7 +109,13 @@ impl Cli {
             (None, true) => (7.0, 8.0),
             (None, false) => (8.5, 10.0),
         };
-        Geometry { width, height, margin: MARGIN, font_size, leading }
+        Geometry {
+            width,
+            height,
+            margin: MARGIN,
+            font_size,
+            leading,
+        }
     }
 
     pub fn pdf_options(&self) -> PdfOptions {
@@ -133,7 +143,11 @@ impl Cli {
     }
 
     pub fn out_mode(&self) -> OutMode<'_> {
-        if self.in_place { OutMode::InPlace } else { OutMode::Dir(&self.out) }
+        if self.in_place {
+            OutMode::InPlace
+        } else {
+            OutMode::Dir(&self.out)
+        }
     }
 
     pub fn unmappable(&self) -> Unmappable {
@@ -198,7 +212,10 @@ mod tests {
 
     #[test]
     fn in_place_selects_the_in_place_out_mode() {
-        assert!(matches!(parse(&["src", "--in-place"]).out_mode(), OutMode::InPlace));
+        assert!(matches!(
+            parse(&["src", "--in-place"]).out_mode(),
+            OutMode::InPlace
+        ));
         assert!(matches!(parse(&["src"]).out_mode(), OutMode::Dir(_)));
     }
 
@@ -212,13 +229,22 @@ mod tests {
     #[test]
     fn ext_overrides_the_default_set_and_is_normalised() {
         let e = parse(&["src", "--ext", ".RS,py, .Go"]).extensions();
-        assert_eq!(e.iter().cloned().collect::<Vec<_>>(), vec!["go", "py", "rs"]);
+        assert_eq!(
+            e.iter().cloned().collect::<Vec<_>>(),
+            vec!["go", "py", "rs"]
+        );
     }
 
     #[test]
     fn on_unmappable_maps_to_the_encode_enum() {
-        assert_eq!(parse(&["s", "--on-unmappable", "replace"]).unmappable(), Unmappable::Replace);
-        assert_eq!(parse(&["s", "--on-unmappable", "fail"]).unmappable(), Unmappable::Fail);
+        assert_eq!(
+            parse(&["s", "--on-unmappable", "replace"]).unmappable(),
+            Unmappable::Replace
+        );
+        assert_eq!(
+            parse(&["s", "--on-unmappable", "fail"]).unmappable(),
+            Unmappable::Fail
+        );
     }
 
     #[test]

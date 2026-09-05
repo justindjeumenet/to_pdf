@@ -42,7 +42,10 @@ pub fn run(cli: &Cli) -> Summary {
         cli.max_file_size.saturating_mul(1024 * 1024),
     );
 
-    let mut summary = Summary { skipped, ..Summary::default() };
+    let mut summary = Summary {
+        skipped,
+        ..Summary::default()
+    };
     if cli.dry_run {
         summary.converted = jobs.len();
         return summary;
@@ -99,7 +102,10 @@ fn convert(job: &Job, cfg: &Config) -> Result<Outcome, String> {
     let mut lines = Vec::with_capacity(raw.len());
     for l in raw {
         let (line, touched) = encode::transcode_line(&l, cfg.unmappable).map_err(|c| {
-            format!("unmappable character U+{:04X} (--on-unmappable=fail)", c as u32)
+            format!(
+                "unmappable character U+{:04X} (--on-unmappable=fail)",
+                c as u32
+            )
         })?;
         escaped |= touched;
         lines.push(line);
@@ -113,7 +119,11 @@ fn convert(job: &Job, cfg: &Config) -> Result<Outcome, String> {
     }
     std::fs::write(&job.dst, &out).map_err(|e| e.to_string())?;
 
-    Ok(Outcome { bytes_in: bytes.len() as u64, bytes_out: out.len() as u64, escaped })
+    Ok(Outcome {
+        bytes_in: bytes.len() as u64,
+        bytes_out: out.len() as u64,
+        escaped,
+    })
 }
 
 impl Summary {
@@ -151,7 +161,10 @@ impl Summary {
             human(self.bytes_out),
         );
         if self.escaped_files > 0 {
-            println!("{} file(s) contained characters escaped as \\u{{...}}", self.escaped_files);
+            println!(
+                "{} file(s) contained characters escaped as \\u{{...}}",
+                self.escaped_files
+            );
         }
     }
 }
@@ -164,7 +177,11 @@ fn human(n: u64) -> String {
         v /= 1024.0;
         u += 1;
     }
-    if u == 0 { format!("{n} B") } else { format!("{v:.1} {}", UNITS[u]) }
+    if u == 0 {
+        format!("{n} B")
+    } else {
+        format!("{v:.1} {}", UNITS[u])
+    }
 }
 
 #[cfg(test)]
@@ -193,7 +210,10 @@ mod tests {
 
     #[test]
     fn converts_a_tree_and_mirrors_it() {
-        let root = scratch("tree", &[("a.rs", "fn main() {}\n"), ("sub/b.py", "x = 1\n")]);
+        let root = scratch(
+            "tree",
+            &[("a.rs", "fn main() {}\n"), ("sub/b.py", "x = 1\n")],
+        );
         let out = root.join("out");
         let s = run_on(&[root.to_str().unwrap(), "-o", out.to_str().unwrap()]);
         assert_eq!(s.converted, 2);
@@ -239,7 +259,10 @@ mod tests {
 
     #[test]
     fn escaped_files_are_counted() {
-        let root = scratch("esc", &[("a.py", "s = \"\u{1F600}\"\n"), ("b.py", "s = 1\n")]);
+        let root = scratch(
+            "esc",
+            &[("a.py", "s = \"\u{1F600}\"\n"), ("b.py", "s = 1\n")],
+        );
         let s = run_on(&[root.to_str().unwrap(), "--in-place"]);
         assert_eq!(s.converted, 2);
         assert_eq!(s.escaped_files, 1);
@@ -248,7 +271,12 @@ mod tests {
     #[test]
     fn on_unmappable_fail_turns_the_file_into_a_failure() {
         let root = scratch("fail", &[("a.py", "s = \"\u{1F600}\"\n")]);
-        let s = run_on(&[root.to_str().unwrap(), "--in-place", "--on-unmappable", "fail"]);
+        let s = run_on(&[
+            root.to_str().unwrap(),
+            "--in-place",
+            "--on-unmappable",
+            "fail",
+        ]);
         assert_eq!(s.converted, 0);
         assert_eq!(s.failed.len(), 1);
         assert!(s.failed[0].1.contains("U+1F600"), "got: {}", s.failed[0].1);

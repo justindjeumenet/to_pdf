@@ -6,6 +6,7 @@
 //! "emit the text, skip the tag".
 
 /// Character entities worth decoding. Anything else passes through verbatim.
+#[rustfmt::skip]
 const NAMED: &[(&str, char)] = &[
     ("amp", '&'), ("lt", '<'), ("gt", '>'), ("quot", '"'), ("apos", '\''),
     ("nbsp", '\u{A0}'), ("mdash", '\u{2014}'), ("ndash", '\u{2013}'),
@@ -23,9 +24,35 @@ const NAMED: &[(&str, char)] = &[
 
 /// Tags that force a line break.
 const BLOCK: &[&str] = &[
-    "p", "div", "br", "hr", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6",
-    "tr", "table", "section", "article", "blockquote", "header", "footer",
-    "nav", "aside", "figure", "figcaption", "dl", "dt", "dd", "form", "main",
+    "p",
+    "div",
+    "br",
+    "hr",
+    "li",
+    "ul",
+    "ol",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "tr",
+    "table",
+    "section",
+    "article",
+    "blockquote",
+    "header",
+    "footer",
+    "nav",
+    "aside",
+    "figure",
+    "figcaption",
+    "dl",
+    "dt",
+    "dd",
+    "form",
+    "main",
 ];
 
 /// Tags contributing no text at all.
@@ -57,7 +84,11 @@ pub fn extract(bytes: &[u8]) -> Vec<String> {
             match name.as_str() {
                 "script" | "style" | "head" if !closing => i = skip_element(&b, i, &name),
                 "pre" => {
-                    pre = if closing { pre.saturating_sub(1) } else { pre + 1 };
+                    pre = if closing {
+                        pre.saturating_sub(1)
+                    } else {
+                        pre + 1
+                    };
                     newline(&mut out);
                 }
                 "li" if !closing => {
@@ -111,7 +142,11 @@ fn skip_element(b: &[char], from: usize, name: &str) -> usize {
     let n = close.len();
     let mut i = from;
     while i + n <= b.len() {
-        if b[i..i + n].iter().zip(&close).all(|(a, c)| a.to_ascii_lowercase() == *c) {
+        if b[i..i + n]
+            .iter()
+            .zip(&close)
+            .all(|(a, c)| a.to_ascii_lowercase() == *c)
+        {
             return tag_end(b, i).map_or(b.len(), |g| g + 1);
         }
         i += 1;
@@ -144,12 +179,22 @@ fn entity(b: &[char], i: usize) -> Option<(char, usize)> {
     let body: String = b[i + 1..semi].iter().collect();
     let len = semi - i + 1;
     if let Some(hex) = body.strip_prefix("#x").or_else(|| body.strip_prefix("#X")) {
-        return u32::from_str_radix(hex, 16).ok().and_then(char::from_u32).map(|c| (c, len));
+        return u32::from_str_radix(hex, 16)
+            .ok()
+            .and_then(char::from_u32)
+            .map(|c| (c, len));
     }
     if let Some(dec) = body.strip_prefix('#') {
-        return dec.parse::<u32>().ok().and_then(char::from_u32).map(|c| (c, len));
+        return dec
+            .parse::<u32>()
+            .ok()
+            .and_then(char::from_u32)
+            .map(|c| (c, len));
     }
-    NAMED.iter().find(|(n, _)| *n == body).map(|&(_, c)| (c, len))
+    NAMED
+        .iter()
+        .find(|(n, _)| *n == body)
+        .map(|&(_, c)| (c, len))
 }
 
 /// Trim trailing space, squeeze blank-line runs to one, drop leading and
@@ -191,19 +236,27 @@ mod tests {
     #[test]
     fn script_style_and_head_contents_are_dropped() {
         assert_eq!(
-            e("<head><title>T</title></head><body><script>var x = 1 < 2;</script><style>p{a:b}</style><p>kept</p></body>"),
+            e(
+                "<head><title>T</title></head><body><script>var x = 1 < 2;</script><style>p{a:b}</style><p>kept</p></body>"
+            ),
             vec!["kept"]
         );
     }
 
     #[test]
     fn list_items_get_a_dash_prefix() {
-        assert_eq!(e("<ul><li>one</li><li>two</li></ul>"), vec!["- one", "- two"]);
+        assert_eq!(
+            e("<ul><li>one</li><li>two</li></ul>"),
+            vec!["- one", "- two"]
+        );
     }
 
     #[test]
     fn named_and_numeric_entities_decode() {
-        assert_eq!(e("<p>a &amp; b &lt; c &#65; &#x42; &mdash; d</p>"), vec!["a & b < c A B \u{2014} d"]);
+        assert_eq!(
+            e("<p>a &amp; b &lt; c &#65; &#x42; &mdash; d</p>"),
+            vec!["a & b < c A B \u{2014} d"]
+        );
     }
 
     #[test]
@@ -218,12 +271,18 @@ mod tests {
 
     #[test]
     fn pre_preserves_internal_whitespace() {
-        assert_eq!(e("<pre>def f():\n    return 1</pre>"), vec!["def f():", "    return 1"]);
+        assert_eq!(
+            e("<pre>def f():\n    return 1</pre>"),
+            vec!["def f():", "    return 1"]
+        );
     }
 
     #[test]
     fn images_are_dropped_including_alt_text() {
-        assert_eq!(e("<p>before<img src='x.png' alt='a picture'>after</p>"), vec!["beforeafter"]);
+        assert_eq!(
+            e("<p>before<img src='x.png' alt='a picture'>after</p>"),
+            vec!["beforeafter"]
+        );
     }
 
     #[test]

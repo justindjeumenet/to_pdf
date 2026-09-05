@@ -38,7 +38,13 @@ mod tests {
         let src = "def f():\n    if x:\n        return 1  \n\n    return 0\n";
         assert_eq!(
             extract(src.as_bytes()),
-            vec!["def f():", "    if x:", "        return 1  ", "", "    return 0"]
+            vec![
+                "def f():",
+                "    if x:",
+                "        return 1  ",
+                "",
+                "    return 0"
+            ]
         );
     }
 

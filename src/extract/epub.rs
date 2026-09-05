@@ -19,7 +19,9 @@ pub fn extract(bytes: &[u8]) -> Result<Vec<String>, String> {
         .ok_or("container.xml declares no rootfile full-path")?;
 
     let opf = entry(&mut zip, &opf_path)?;
-    let base = opf_path.rsplit_once('/').map_or(String::new(), |(d, _)| format!("{d}/"));
+    let base = opf_path
+        .rsplit_once('/')
+        .map_or(String::new(), |(d, _)| format!("{d}/"));
 
     let manifest: Vec<(String, String)> = start_tags(&opf, "item")
         .iter()
@@ -28,9 +30,15 @@ pub fn extract(bytes: &[u8]) -> Result<Vec<String>, String> {
 
     let mut lines: Vec<String> = Vec::new();
     for t in start_tags(&opf, "itemref") {
-        let Some(idref) = attr(&t, "idref") else { continue };
-        let Some((_, href)) = manifest.iter().find(|(id, _)| *id == idref) else { continue };
-        let Ok(doc) = entry(&mut zip, &normalise(&format!("{base}{href}"))) else { continue };
+        let Some(idref) = attr(&t, "idref") else {
+            continue;
+        };
+        let Some((_, href)) = manifest.iter().find(|(id, _)| *id == idref) else {
+            continue;
+        };
+        let Ok(doc) = entry(&mut zip, &normalise(&format!("{base}{href}"))) else {
+            continue;
+        };
         let chapter = super::html::extract(doc.as_bytes());
         if chapter.is_empty() {
             continue;
@@ -48,9 +56,12 @@ pub fn extract(bytes: &[u8]) -> Result<Vec<String>, String> {
 }
 
 fn entry<R: Read + Seek>(zip: &mut ZipArchive<R>, name: &str) -> Result<String, String> {
-    let mut f = zip.by_name(name).map_err(|_| format!("missing EPUB entry: {name}"))?;
+    let mut f = zip
+        .by_name(name)
+        .map_err(|_| format!("missing EPUB entry: {name}"))?;
     let mut buf = Vec::new();
-    f.read_to_end(&mut buf).map_err(|e| format!("unreadable EPUB entry {name}: {e}"))?;
+    f.read_to_end(&mut buf)
+        .map_err(|e| format!("unreadable EPUB entry {name}: {e}"))?;
     Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
@@ -142,8 +153,14 @@ mod tests {
             ("mimetype", "application/epub+zip"),
             ("META-INF/container.xml", CONTAINER),
             ("OEBPS/content.opf", OPF),
-            ("OEBPS/one.xhtml", "<html><body><h1>Chapter One</h1><p>alpha</p></body></html>"),
-            ("OEBPS/two.xhtml", "<html><body><h1>Chapter Two</h1><p>beta</p></body></html>"),
+            (
+                "OEBPS/one.xhtml",
+                "<html><body><h1>Chapter One</h1><p>alpha</p></body></html>",
+            ),
+            (
+                "OEBPS/two.xhtml",
+                "<html><body><h1>Chapter Two</h1><p>beta</p></body></html>",
+            ),
         ])
     }
 
@@ -198,7 +215,10 @@ mod tests {
     #[test]
     fn an_empty_spine_is_a_clean_error() {
         let opf = r#"<package><manifest></manifest><spine></spine></package>"#;
-        let b = epub(&[("META-INF/container.xml", CONTAINER), ("OEBPS/content.opf", opf)]);
+        let b = epub(&[
+            ("META-INF/container.xml", CONTAINER),
+            ("OEBPS/content.opf", opf),
+        ]);
         assert!(extract(&b).is_err());
     }
 

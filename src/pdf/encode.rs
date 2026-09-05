@@ -15,6 +15,7 @@ pub enum Unmappable {
 
 /// CP1252 code points for bytes 0x80..=0x9F. `None` marks the five slots that
 /// CP1252 leaves undefined (0x81, 0x8D, 0x8F, 0x90, 0x9D).
+#[rustfmt::skip]
 const HIGH: [Option<char>; 32] = [
     Some('\u{20AC}'), None,             Some('\u{201A}'), Some('\u{0192}'),
     Some('\u{201E}'), Some('\u{2026}'), Some('\u{2020}'), Some('\u{2021}'),
@@ -34,7 +35,10 @@ pub fn winansi_byte(c: char) -> Option<u8> {
     match c {
         ' '..='~' => Some(c as u8),
         '\u{A0}'..='\u{FF}' => Some(c as u32 as u8),
-        _ => HIGH.iter().position(|&h| h == Some(c)).map(|i| 0x80 + i as u8),
+        _ => HIGH
+            .iter()
+            .position(|&h| h == Some(c))
+            .map(|i| 0x80 + i as u8),
     }
 }
 
@@ -62,7 +66,9 @@ pub fn transcode_line(line: &str, mode: Unmappable) -> Result<(String, bool), ch
 
 /// Encode a line that has already been through [`transcode_line`].
 pub fn encode_line(line: &str) -> Vec<u8> {
-    line.chars().map(|c| winansi_byte(c).unwrap_or(b'?')).collect()
+    line.chars()
+        .map(|c| winansi_byte(c).unwrap_or(b'?'))
+        .collect()
 }
 
 /// Escape a byte string for use inside a PDF literal string `( ... )`.
@@ -132,7 +138,10 @@ mod tests {
 
     #[test]
     fn fail_mode_reports_the_offending_char() {
-        assert_eq!(transcode_line("a\u{4E2D}b", Unmappable::Fail), Err('\u{4E2D}'));
+        assert_eq!(
+            transcode_line("a\u{4E2D}b", Unmappable::Fail),
+            Err('\u{4E2D}')
+        );
     }
 
     #[test]

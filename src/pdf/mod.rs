@@ -50,7 +50,9 @@ fn content_stream(lines: &[String], page_no: usize, total: usize, o: &PdfOptions
         let w = label.chars().count() as f64 * o.font_size * 0.6;
         let x = (o.width - w) / 2.0;
         let y = o.margin / 2.0;
-        s.extend_from_slice(format!("BT\n/F0 {:.2} Tf\n{x:.2} {y:.2} Td\n(", o.font_size).as_bytes());
+        s.extend_from_slice(
+            format!("BT\n/F0 {:.2} Tf\n{x:.2} {y:.2} Td\n(", o.font_size).as_bytes(),
+        );
         s.extend_from_slice(&escape_literal(&encode_line(&label)));
         s.extend_from_slice(b")Tj\nET\n");
     }
@@ -72,7 +74,10 @@ pub fn build(pages: &[Vec<String>], o: &PdfOptions) -> Vec<u8> {
 
     let kids: String = (0..n).map(|i| format!("{} 0 R ", page_id(i))).collect();
     let mut compressed = vec![
-        CompressedObj { id: 1, body: "<</Type/Catalog/Pages 2 0 R>>".into() },
+        CompressedObj {
+            id: 1,
+            body: "<</Type/Catalog/Pages 2 0 R>>".into(),
+        },
         CompressedObj {
             id: 2,
             body: format!(
@@ -110,7 +115,10 @@ pub fn build(pages: &[Vec<String>], o: &PdfOptions) -> Vec<u8> {
 
     let (stm_dict, stm_data) = object_stream(&compressed);
     for (idx, c) in compressed.iter().enumerate() {
-        entries[c.id as usize] = Entry::InStream { stm: objstm_id, idx: idx as u32 };
+        entries[c.id as usize] = Entry::InStream {
+            stm: objstm_id,
+            idx: idx as u32,
+        };
     }
     entries[objstm_id as usize] = Entry::InFile(out.len() as u64);
     out.extend_from_slice(&stream_object(objstm_id, &stm_dict, &stm_data));
@@ -134,8 +142,12 @@ mod tests {
 
     fn opts() -> PdfOptions {
         PdfOptions {
-            width: 595.28, height: 841.89, margin: 36.0,
-            font_size: 8.5, leading: 10.0, page_numbers: false,
+            width: 595.28,
+            height: 841.89,
+            margin: 36.0,
+            font_size: 8.5,
+            leading: 10.0,
+            page_numbers: false,
         }
     }
 
@@ -145,14 +157,25 @@ mod tests {
 
     fn inflate(b: &[u8]) -> Vec<u8> {
         let mut out = Vec::new();
-        flate2::read::ZlibDecoder::new(b).read_to_end(&mut out).unwrap();
+        flate2::read::ZlibDecoder::new(b)
+            .read_to_end(&mut out)
+            .unwrap();
         out
     }
 
     /// Payload of the first `stream ... endstream` at or after byte `from`.
     fn stream_at(pdf: &[u8], from: usize) -> Vec<u8> {
-        let start = from + pdf[from..].windows(7).position(|w| w == b"stream\n").unwrap() + 7;
-        let end = start + pdf[start..].windows(10).position(|w| w == b"\nendstream").unwrap();
+        let start = from
+            + pdf[from..]
+                .windows(7)
+                .position(|w| w == b"stream\n")
+                .unwrap()
+            + 7;
+        let end = start
+            + pdf[start..]
+                .windows(10)
+                .position(|w| w == b"\nendstream")
+                .unwrap();
         pdf[start..end].to_vec()
     }
 
@@ -175,9 +198,14 @@ mod tests {
 
     fn startxref_offset(pdf: &[u8]) -> usize {
         let text = String::from_utf8_lossy(&pdf[pdf.len().saturating_sub(64)..]).into_owned();
-        text.rsplit("startxref\n").next().unwrap()
-            .split_whitespace().next().unwrap()
-            .parse().unwrap()
+        text.rsplit("startxref\n")
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap()
     }
 
     #[test]
@@ -227,7 +255,11 @@ mod tests {
         let content = String::from_utf8(inflate(&stream_at(&pdf, 0))).unwrap();
         assert_eq!(content.matches(")'").count(), 3);
         assert!(!content.contains("Tj"), "use ' rather than T* + Tj");
-        assert_eq!(content.matches(" Tf").count(), 1, "Tf is issued once per page");
+        assert_eq!(
+            content.matches(" Tf").count(),
+            1,
+            "Tf is issued once per page"
+        );
         assert_eq!(content.matches(" TL").count(), 1);
         assert_eq!(content.matches(" Td").count(), 1);
     }

@@ -22,7 +22,10 @@ pub fn object_stream(objs: &[CompressedObj]) -> (String, Vec<u8>) {
     let mut raw = header;
     raw.push_str(&bodies);
     let data = flate(raw.as_bytes());
-    let dict = format!("/Type/ObjStm/N {}/First {first}/Filter/FlateDecode", objs.len());
+    let dict = format!(
+        "/Type/ObjStm/N {}/First {first}/Filter/FlateDecode",
+        objs.len()
+    );
     (dict, data)
 }
 
@@ -62,15 +65,23 @@ mod tests {
 
     fn inflate(b: &[u8]) -> Vec<u8> {
         let mut out = Vec::new();
-        flate2::read::ZlibDecoder::new(b).read_to_end(&mut out).unwrap();
+        flate2::read::ZlibDecoder::new(b)
+            .read_to_end(&mut out)
+            .unwrap();
         out
     }
 
     #[test]
     fn object_stream_header_indexes_each_body() {
         let objs = vec![
-            CompressedObj { id: 1, body: "<</Type/Catalog>>".into() },
-            CompressedObj { id: 2, body: "<</Type/Pages>>".into() },
+            CompressedObj {
+                id: 1,
+                body: "<</Type/Catalog>>".into(),
+            },
+            CompressedObj {
+                id: 2,
+                body: "<</Type/Pages>>".into(),
+            },
         ];
         let (dict, data) = object_stream(&objs);
         assert!(dict.contains("/Type/ObjStm"));
@@ -79,9 +90,15 @@ mod tests {
 
         let raw = String::from_utf8(inflate(&data)).unwrap();
         let first: usize = dict
-            .split("/First ").nth(1).unwrap()
-            .split('/').next().unwrap()
-            .trim().parse().unwrap();
+            .split("/First ")
+            .nth(1)
+            .unwrap()
+            .split('/')
+            .next()
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
         assert_eq!(&raw[..first], "1 0 2 18 ");
         assert!(raw[first..].starts_with("<</Type/Catalog>>"));
     }
@@ -96,7 +113,10 @@ mod tests {
             .collect();
         let raw_len: usize = objs.iter().map(|o| o.body.len() + 1).sum();
         let (_, data) = object_stream(&objs);
-        assert!(data.len() < raw_len / 4, "200 page dicts must compress hard");
+        assert!(
+            data.len() < raw_len / 4,
+            "200 page dicts must compress hard"
+        );
     }
 
     #[test]

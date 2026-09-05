@@ -6,5 +6,9 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let summary = pipeline::run(&cli);
     summary.report(cli.quiet, cli.verbose);
-    if summary.failed.is_empty() { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+    if summary.failed.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }

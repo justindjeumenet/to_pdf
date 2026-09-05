@@ -109,7 +109,13 @@ mod tests {
     use super::*;
 
     fn a4() -> Geometry {
-        Geometry { width: 595.28, height: 841.89, margin: 36.0, font_size: 8.5, leading: 10.0 }
+        Geometry {
+            width: 595.28,
+            height: 841.89,
+            margin: 36.0,
+            font_size: 8.5,
+            leading: 10.0,
+        }
     }
 
     fn v(lines: &[&str]) -> Vec<String> {
@@ -124,7 +130,11 @@ mod tests {
 
     #[test]
     fn dense_geometry_fits_more() {
-        let g = Geometry { font_size: 7.0, leading: 8.0, ..a4() };
+        let g = Geometry {
+            font_size: 7.0,
+            leading: 8.0,
+            ..a4()
+        };
         assert_eq!(g.columns(), 124);
         assert_eq!(g.rows(), 96);
     }
@@ -165,7 +175,10 @@ mod tests {
     fn wrapping_uses_a_gutter_and_never_shifts_source_columns() {
         let long = "x".repeat(105);
         let pages = paginate(&v(&["    indented", &long]), &a4(), 4, false);
-        assert_eq!(pages[0][0], "      indented", "normal lines get two blank gutter columns");
+        assert_eq!(
+            pages[0][0], "      indented",
+            "normal lines get two blank gutter columns"
+        );
         assert_eq!(pages[0][1], format!("  {}", "x".repeat(100)));
         assert_eq!(pages[0][2], format!("\u{BB} {}", "x".repeat(5)));
     }
@@ -175,7 +188,11 @@ mod tests {
         let g = a4();
         let exactly = "y".repeat(g.columns());
         let over = "y".repeat(g.columns() + 1);
-        assert_eq!(paginate(&v(&[&exactly]), &g, 4, false)[0].len(), 1, "exactly full must not wrap");
+        assert_eq!(
+            paginate(&v(&[&exactly]), &g, 4, false)[0].len(),
+            1,
+            "exactly full must not wrap"
+        );
         assert_eq!(paginate(&v(&[&over]), &g, 4, false)[0].len(), 2);
     }
 

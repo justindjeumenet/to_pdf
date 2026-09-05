@@ -27,7 +27,6 @@ pub fn extract(path: &Path, bytes: &[u8]) -> Result<Vec<String>, String> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -49,7 +48,9 @@ mod tests {
     fn default_extension_set_matches_the_spec() {
         assert_eq!(
             DEFAULT_EXTS,
-            ["js", "ts", "go", "rs", "py", "txt", "md", "markdown", "html", "epub"]
+            [
+                "js", "ts", "go", "rs", "py", "txt", "md", "markdown", "html", "epub"
+            ]
         );
     }
 }

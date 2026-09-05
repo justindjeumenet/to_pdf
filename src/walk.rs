@@ -66,10 +66,21 @@ pub fn discover(
                     Some(d.join(root.file_name().unwrap_or(std::ffi::OsStr::new("root"))))
                 }
             };
-            walk_dir(root, root, prefix.as_deref(), exts, max_bytes, &mut jobs, &mut skips);
+            walk_dir(
+                root,
+                root,
+                prefix.as_deref(),
+                exts,
+                max_bytes,
+                &mut jobs,
+                &mut skips,
+            );
         } else {
             // A symlinked root: not followed, by the same rule as inner entries.
-            skips.push(Skip::Unreadable(root.clone(), "symlinks are not followed".into()));
+            skips.push(Skip::Unreadable(
+                root.clone(),
+                "symlinks are not followed".into(),
+            ));
         }
     }
 
@@ -138,7 +149,10 @@ fn consider(
     }
     match std::fs::metadata(src) {
         Ok(m) if m.len() > max_bytes => skips.push(Skip::TooLarge(src.to_path_buf(), m.len())),
-        Ok(_) => jobs.push(Job { src: src.to_path_buf(), dst }),
+        Ok(_) => jobs.push(Job {
+            src: src.to_path_buf(),
+            dst,
+        }),
         Err(e) => skips.push(Skip::Unreadable(src.to_path_buf(), e.to_string())),
     }
 }
@@ -168,7 +182,12 @@ mod tests {
     fn a_single_file_input_maps_into_the_out_dir_without_a_subdirectory() {
         let root = tree("single", &[("main.rs", "fn main() {}")]);
         let out = root.join("out");
-        let (jobs, _) = discover(&[root.join("main.rs")], OutMode::Dir(&out), &exts(), 1 << 20);
+        let (jobs, _) = discover(
+            &[root.join("main.rs")],
+            OutMode::Dir(&out),
+            &exts(),
+            1 << 20,
+        );
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].dst, out.join("main.rs.pdf"));
     }
@@ -178,14 +197,20 @@ mod tests {
         let root = tree("collide", &[("a/x.rs", "1"), ("a/x.py", "2")]);
         let out = root.join("out");
         let (jobs, _) = discover(&[root.join("a")], OutMode::Dir(&out), &exts(), 1 << 20);
-        let names: Vec<_> = jobs.iter().map(|j| j.dst.file_name().unwrap().to_owned()).collect();
+        let names: Vec<_> = jobs
+            .iter()
+            .map(|j| j.dst.file_name().unwrap().to_owned())
+            .collect();
         assert!(names.contains(&"x.rs.pdf".into()));
         assert!(names.contains(&"x.py.pdf".into()));
     }
 
     #[test]
     fn subdirectories_are_walked_recursively_and_structure_is_mirrored() {
-        let root = tree("deep", &[("s/a.rs", "1"), ("s/b/c.rs", "2"), ("s/b/d/e.rs", "3")]);
+        let root = tree(
+            "deep",
+            &[("s/a.rs", "1"), ("s/b/c.rs", "2"), ("s/b/d/e.rs", "3")],
+        );
         let out = root.join("out");
         let (jobs, _) = discover(&[root.join("s")], OutMode::Dir(&out), &exts(), 1 << 20);
         assert_eq!(jobs.len(), 3);
@@ -194,11 +219,16 @@ mod tests {
 
     #[test]
     fn two_roots_with_the_same_inner_path_do_not_collide() {
-        let root = tree("roots", &[("api/src/main.rs", "1"), ("web/src/main.rs", "2")]);
+        let root = tree(
+            "roots",
+            &[("api/src/main.rs", "1"), ("web/src/main.rs", "2")],
+        );
         let out = root.join("out");
         let (jobs, _) = discover(
             &[root.join("api"), root.join("web")],
-            OutMode::Dir(&out), &exts(), 1 << 20,
+            OutMode::Dir(&out),
+            &exts(),
+            1 << 20,
         );
         let dsts: Vec<_> = jobs.iter().map(|j| j.dst.clone()).collect();
         assert!(dsts.contains(&out.join("api/src/main.rs.pdf")));
@@ -208,14 +238,24 @@ mod tests {
     #[test]
     fn in_place_writes_next_to_the_source() {
         let root = tree("inplace", &[("a.rs", "1")]);
-        let (jobs, _) = discover(&[root.clone()], OutMode::InPlace, &exts(), 1 << 20);
+        let (jobs, _) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &exts(),
+            1 << 20,
+        );
         assert_eq!(jobs[0].dst, root.join("a.rs.pdf"));
     }
 
     #[test]
     fn unsupported_extensions_are_skipped_and_reported() {
         let root = tree("skip", &[("a.rs", "1"), ("b.bin", "2"), ("c", "3")]);
-        let (jobs, skips) = discover(&[root.clone()], OutMode::InPlace, &exts(), 1 << 20);
+        let (jobs, skips) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &exts(),
+            1 << 20,
+        );
         assert_eq!(jobs.len(), 1);
         assert_eq!(skips.len(), 2);
         assert!(skips.iter().all(|s| matches!(s, Skip::UnsupportedExt(_))));
@@ -224,14 +264,19 @@ mod tests {
     #[test]
     fn extension_matching_is_case_insensitive() {
         let root = tree("case", &[("A.RS", "1")]);
-        let (jobs, _) = discover(&[root.clone()], OutMode::InPlace, &exts(), 1 << 20);
+        let (jobs, _) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &exts(),
+            1 << 20,
+        );
         assert_eq!(jobs.len(), 1);
     }
 
     #[test]
     fn oversized_files_are_skipped_and_reported() {
         let root = tree("big", &[("a.rs", "0123456789")]);
-        let (jobs, skips) = discover(&[root.clone()], OutMode::InPlace, &exts(), 5);
+        let (jobs, skips) = discover(std::slice::from_ref(&root), OutMode::InPlace, &exts(), 5);
         assert!(jobs.is_empty());
         assert!(matches!(skips[0], Skip::TooLarge(_, 10)));
     }
@@ -239,8 +284,18 @@ mod tests {
     #[test]
     fn job_order_is_deterministic() {
         let root = tree("order", &[("z.rs", "1"), ("a.rs", "2"), ("m/q.rs", "3")]);
-        let (a, _) = discover(&[root.clone()], OutMode::InPlace, &exts(), 1 << 20);
-        let (b, _) = discover(&[root.clone()], OutMode::InPlace, &exts(), 1 << 20);
+        let (a, _) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &exts(),
+            1 << 20,
+        );
+        let (b, _) = discover(
+            std::slice::from_ref(&root),
+            OutMode::InPlace,
+            &exts(),
+            1 << 20,
+        );
         assert_eq!(a, b);
         let srcs: Vec<_> = a.iter().map(|j| j.src.clone()).collect();
         let mut sorted = srcs.clone();

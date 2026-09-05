@@ -22,7 +22,10 @@ pub struct CompressedObj {
 /// Serialize a top-level stream object. `dict_body` is spliced between `<<`
 /// and the generated `/Length`, e.g. `"/Type/ObjStm/N 4/First 20"`.
 pub fn stream_object(id: u32, dict_body: &str, data: &[u8]) -> Vec<u8> {
-    let head = format!("{id} 0 obj\n<<{dict_body}/Length {}>>\nstream\n", data.len());
+    let head = format!(
+        "{id} 0 obj\n<<{dict_body}/Length {}>>\nstream\n",
+        data.len()
+    );
     let mut out = Vec::with_capacity(head.len() + data.len() + 20);
     out.extend_from_slice(head.as_bytes());
     out.extend_from_slice(data);
@@ -39,7 +42,10 @@ mod tests {
     fn flate_round_trips() {
         let src = b"BT /F0 8.5 Tf (hello) ' ET".repeat(40);
         let packed = flate(&src);
-        assert!(packed.len() < src.len(), "compression should shrink repetitive input");
+        assert!(
+            packed.len() < src.len(),
+            "compression should shrink repetitive input"
+        );
         let mut d = flate2::read::ZlibDecoder::new(&packed[..]);
         let mut back = Vec::new();
         d.read_to_end(&mut back).unwrap();
