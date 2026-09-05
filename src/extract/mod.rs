@@ -20,11 +20,12 @@ use std::path::Path;
 pub const DEFAULT_EXTS: &[&str] = &[
     "c",     "cc",    "cfg",   "cjs",   "cpp",   "cs",    "css",
     "csv",   "cts",   "dockerfile",     "epub",  "go",    "h",
-    "hpp",   "htm",   "html",  "in",    "ini",   "java",  "js",
-    "json",  "jsx",   "kt",    "lua",   "makefile",       "markdown",
-    "md",    "mjs",   "mts",   "php",   "py",    "qmd",   "rb",
-    "rs",    "rst",   "scss",  "sh",    "sql",   "swift", "toml",
-    "ts",    "tsx",   "txt",   "xml",   "yaml",  "yml",
+    "hpp",   "htm",   "html",  "in",    "ini",   "ipynb", "java",
+    "js",    "json",  "jsx",   "kt",    "lua",   "makefile",
+    "markdown",       "md",    "mjs",   "mk",    "mts",   "php",
+    "py",    "qmd",   "rb",    "rs",    "rst",   "scss",  "sh",
+    "sql",   "swift", "toml",  "ts",    "tsx",   "txt",   "xml",
+    "yaml",  "yml",
 ];
 
 /// Extract `bytes` according to `path`'s extension. Anything unrecognised is

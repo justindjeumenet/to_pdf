@@ -65,7 +65,9 @@ to_pdf api web -o out
 
 **Configuration** — `.cfg` `.ini` `.json` `.toml` `.yaml` `.yml`
 
-**Build and data** — `Dockerfile` `Makefile` `.csv` `.in`
+**Build and data** — `Dockerfile` `Makefile` `.csv` `.in` `.mk` `.ipynb`
+
+`.ipynb` is typeset as raw notebook JSON, not as rendered cells.
 
 Entries match a file's extension *or* its whole filename, case-insensitively,
 so `dockerfile` covers both a bare `Dockerfile` and `debug.Dockerfile`. A
