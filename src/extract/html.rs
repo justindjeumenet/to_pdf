@@ -5,21 +5,39 @@
 //! malformed markup by construction — every unexpected shape degrades to
 //! "emit the text, skip the tag".
 
-/// Character entities worth decoding. Anything else passes through verbatim.
+/// HTML 4 named entities for U+00A0..=U+00FF, in code point order: index `i`
+/// is `char::from_u32(160 + i)`. Every one of these has a WinAnsi slot, so
+/// decoding them is always lossless.
+#[rustfmt::skip]
+const LATIN1: [&str; 96] = [
+    "nbsp",   "iexcl",  "cent",   "pound",  "curren", "yen",    "brvbar", "sect",
+    "uml",    "copy",   "ordf",   "laquo",  "not",    "shy",    "reg",    "macr",
+    "deg",    "plusmn", "sup2",   "sup3",   "acute",  "micro",  "para",   "middot",
+    "cedil",  "sup1",   "ordm",   "raquo",  "frac14", "frac12", "frac34", "iquest",
+    "Agrave", "Aacute", "Acirc",  "Atilde", "Auml",   "Aring",  "AElig",  "Ccedil",
+    "Egrave", "Eacute", "Ecirc",  "Euml",   "Igrave", "Iacute", "Icirc",  "Iuml",
+    "ETH",    "Ntilde", "Ograve", "Oacute", "Ocirc",  "Otilde", "Ouml",   "times",
+    "Oslash", "Ugrave", "Uacute", "Ucirc",  "Uuml",   "Yacute", "THORN",  "szlig",
+    "agrave", "aacute", "acirc",  "atilde", "auml",   "aring",  "aelig",  "ccedil",
+    "egrave", "eacute", "ecirc",  "euml",   "igrave", "iacute", "icirc",  "iuml",
+    "eth",    "ntilde", "ograve", "oacute", "ocirc",  "otilde", "ouml",   "divide",
+    "oslash", "ugrave", "uacute", "ucirc",  "uuml",   "yacute", "thorn",  "yuml",
+];
+
+/// The rest: the basic five, plus the CP1252 0x80..=0x9F punctuation. Anything
+/// in neither table passes through verbatim rather than being guessed at.
 #[rustfmt::skip]
 const NAMED: &[(&str, char)] = &[
     ("amp", '&'), ("lt", '<'), ("gt", '>'), ("quot", '"'), ("apos", '\''),
-    ("nbsp", '\u{A0}'), ("mdash", '\u{2014}'), ("ndash", '\u{2013}'),
-    ("hellip", '\u{2026}'), ("lsquo", '\u{2018}'), ("rsquo", '\u{2019}'),
-    ("ldquo", '\u{201C}'), ("rdquo", '\u{201D}'), ("bull", '\u{2022}'),
-    ("copy", '\u{A9}'), ("reg", '\u{AE}'), ("trade", '\u{2122}'),
-    ("middot", '\u{B7}'), ("laquo", '\u{AB}'), ("raquo", '\u{BB}'),
-    ("deg", '\u{B0}'), ("plusmn", '\u{B1}'), ("times", '\u{D7}'),
-    ("divide", '\u{F7}'), ("eacute", '\u{E9}'), ("egrave", '\u{E8}'),
-    ("agrave", '\u{E0}'), ("ccedil", '\u{E7}'), ("uuml", '\u{FC}'),
-    ("ouml", '\u{F6}'), ("auml", '\u{E4}'), ("szlig", '\u{DF}'),
-    ("ntilde", '\u{F1}'), ("aacute", '\u{E1}'), ("iacute", '\u{ED}'),
-    ("oacute", '\u{F3}'), ("uacute", '\u{FA}'),
+    ("euro", '\u{20AC}'),   ("sbquo", '\u{201A}'),  ("fnof", '\u{192}'),
+    ("bdquo", '\u{201E}'),  ("hellip", '\u{2026}'), ("dagger", '\u{2020}'),
+    ("Dagger", '\u{2021}'), ("circ", '\u{2C6}'),    ("permil", '\u{2030}'),
+    ("Scaron", '\u{160}'),  ("lsaquo", '\u{2039}'), ("OElig", '\u{152}'),
+    ("Zcaron", '\u{17D}'),  ("lsquo", '\u{2018}'),  ("rsquo", '\u{2019}'),
+    ("ldquo", '\u{201C}'),  ("rdquo", '\u{201D}'),  ("bull", '\u{2022}'),
+    ("ndash", '\u{2013}'),  ("mdash", '\u{2014}'),  ("tilde", '\u{2DC}'),
+    ("trade", '\u{2122}'),  ("scaron", '\u{161}'),  ("rsaquo", '\u{203A}'),
+    ("oelig", '\u{153}'),   ("zcaron", '\u{17E}'),  ("Yuml", '\u{178}'),
 ];
 
 /// Tags that force a line break.
@@ -191,6 +209,9 @@ fn entity(b: &[char], i: usize) -> Option<(char, usize)> {
             .and_then(char::from_u32)
             .map(|c| (c, len));
     }
+    if let Some(i) = LATIN1.iter().position(|&n| n == body) {
+        return char::from_u32(160 + i as u32).map(|c| (c, len));
+    }
     NAMED
         .iter()
         .find(|(n, _)| *n == body)
@@ -256,6 +277,33 @@ mod tests {
         assert_eq!(
             e("<p>a &amp; b &lt; c &#65; &#x42; &mdash; d</p>"),
             vec!["a & b < c A B \u{2014} d"]
+        );
+    }
+
+    #[test]
+    fn every_latin1_named_entity_decodes() {
+        // Skip index 0 (&nbsp;), which is whitespace and collapses to a space.
+        for (i, name) in LATIN1.iter().enumerate().skip(1) {
+            let c = char::from_u32(160 + i as u32).unwrap();
+            assert_eq!(
+                e(&format!("<p>x&{name};y</p>")),
+                vec![format!("x{c}y")],
+                "&{name}; must decode to U+{:04X}",
+                160 + i as u32
+            );
+        }
+    }
+
+    #[test]
+    fn nbsp_renders_as_an_ordinary_space() {
+        assert_eq!(e("<p>a&nbsp;b</p>"), vec!["a b"]);
+    }
+
+    #[test]
+    fn cp1252_punctuation_entities_decode() {
+        assert_eq!(
+            e("<p>&euro;&dagger;&permil;&OElig;&scaron;&fnof;</p>"),
+            vec!["\u{20AC}\u{2020}\u{2030}\u{152}\u{161}\u{192}"]
         );
     }
 
