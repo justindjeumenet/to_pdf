@@ -50,22 +50,22 @@ pub fn expand_tabs(line: &str, tab_width: usize) -> String {
     out
 }
 
-/// Expand, wrap, prefix the gutter, and chunk into pages.
+/// Wrap, prefix the gutter, and chunk into pages.
+///
+/// `lines` must already be tab-free: run [`expand_tabs`] first. Expansion has
+/// to happen before transcoding, which is upstream of here, so this function
+/// cannot do it itself — a tab reaching this point would already have been
+/// escaped and the column maths would be wrong.
 ///
 /// The gutter is carved out of the column count rather than added to it, so
 /// source column 0 lands at the same x-coordinate on every row of the page —
 /// wrapped or not. Without that, a continuation indent would be
 /// indistinguishable from real Python indentation.
-pub fn paginate(
-    lines: &[String],
-    g: &Geometry,
-    tab_width: usize,
-    line_numbers: bool,
-) -> Vec<Vec<String>> {
+pub fn paginate(lines: &[String], g: &Geometry, line_numbers: bool) -> Vec<Vec<String>> {
     if lines.is_empty() {
         return Vec::new();
     }
-    let expanded: Vec<String> = lines.iter().map(|l| expand_tabs(l, tab_width)).collect();
+    let expanded = lines;
     let cols = g.columns();
     let digits = expanded.len().to_string().len();
 
@@ -155,26 +155,26 @@ mod tests {
 
     #[test]
     fn leading_and_trailing_whitespace_survive_untouched() {
-        let pages = paginate(&v(&["    def f():  "]), &a4(), 4, false);
+        let pages = paginate(&v(&["    def f():  "]), &a4(), false);
         assert_eq!(pages[0][0], "    def f():  ");
     }
 
     #[test]
     fn blank_lines_are_preserved_not_collapsed() {
-        let pages = paginate(&v(&["a", "", "", "b"]), &a4(), 4, false);
+        let pages = paginate(&v(&["a", "", "", "b"]), &a4(), false);
         assert_eq!(pages[0], v(&["a", "", "", "b"]));
     }
 
     #[test]
     fn no_gutter_when_nothing_wraps() {
-        let pages = paginate(&v(&["short"]), &a4(), 4, false);
+        let pages = paginate(&v(&["short"]), &a4(), false);
         assert_eq!(pages[0][0], "short");
     }
 
     #[test]
     fn wrapping_uses_a_gutter_and_never_shifts_source_columns() {
         let long = "x".repeat(105);
-        let pages = paginate(&v(&["    indented", &long]), &a4(), 4, false);
+        let pages = paginate(&v(&["    indented", &long]), &a4(), false);
         assert_eq!(
             pages[0][0], "      indented",
             "normal lines get two blank gutter columns"
@@ -189,16 +189,16 @@ mod tests {
         let exactly = "y".repeat(g.columns());
         let over = "y".repeat(g.columns() + 1);
         assert_eq!(
-            paginate(&v(&[&exactly]), &g, 4, false)[0].len(),
+            paginate(&v(&[&exactly]), &g, false)[0].len(),
             1,
             "exactly full must not wrap"
         );
-        assert_eq!(paginate(&v(&[&over]), &g, 4, false)[0].len(), 2);
+        assert_eq!(paginate(&v(&[&over]), &g, false)[0].len(), 2);
     }
 
     #[test]
     fn line_numbers_force_a_gutter_and_align_right() {
-        let pages = paginate(&v(&["a", "b"]), &a4(), 4, true);
+        let pages = paginate(&v(&["a", "b"]), &a4(), true);
         assert_eq!(pages[0][0], "1  a");
         assert_eq!(pages[0][1], "2  b");
     }
@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn line_number_width_follows_the_largest_number() {
         let lines: Vec<String> = (1..=120).map(|i| format!("l{i}")).collect();
-        let pages = paginate(&lines, &a4(), 4, true);
+        let pages = paginate(&lines, &a4(), true);
         assert_eq!(pages[0][0], "  1  l1");
         assert_eq!(pages[1][0], format!("{:>3}  l77", 77));
     }
@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn line_numbered_continuations_show_the_wrap_marker_with_a_blank_number() {
         let long = "z".repeat(200);
-        let pages = paginate(&v(&[&long]), &a4(), 4, true);
+        let pages = paginate(&v(&[&long]), &a4(), true);
         assert_eq!(pages[0][0], format!("1  {}", "z".repeat(99)));
         assert_eq!(pages[0][1], format!(" \u{BB} {}", "z".repeat(99)));
     }
@@ -222,7 +222,7 @@ mod tests {
     #[test]
     fn pagination_chunks_by_row_count() {
         let lines: Vec<String> = (0..200).map(|i| i.to_string()).collect();
-        let pages = paginate(&lines, &a4(), 4, false);
+        let pages = paginate(&lines, &a4(), false);
         assert_eq!(pages.len(), 3);
         assert_eq!(pages[0].len(), 76);
         assert_eq!(pages[1].len(), 76);
@@ -231,14 +231,14 @@ mod tests {
 
     #[test]
     fn an_empty_line_produces_one_row_not_zero() {
-        let pages = paginate(&v(&[""]), &a4(), 4, false);
+        let pages = paginate(&v(&[""]), &a4(), false);
         assert_eq!(pages[0], v(&[""]));
     }
 
     #[test]
     fn a_very_long_single_line_wraps_without_loss() {
         let long = "q".repeat(100_000);
-        let pages = paginate(&v(&[&long]), &a4(), 4, false);
+        let pages = paginate(&v(&[&long]), &a4(), false);
         let joined: String = pages
             .iter()
             .flatten()
@@ -249,6 +249,6 @@ mod tests {
 
     #[test]
     fn empty_input_yields_no_pages() {
-        assert!(paginate(&[], &a4(), 4, false).is_empty());
+        assert!(paginate(&[], &a4(), false).is_empty());
     }
 }

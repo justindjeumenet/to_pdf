@@ -4,7 +4,7 @@
 use std::io::Read;
 use std::path::PathBuf;
 use std::process::Command;
-use to_pdf::layout::{Geometry, paginate};
+use to_pdf::layout::{Geometry, expand_tabs, paginate};
 use to_pdf::pdf::encode::{Unmappable, transcode_line};
 use to_pdf::pdf::{PdfOptions, build};
 
@@ -34,9 +34,13 @@ fn convert(source: &str) -> Vec<u8> {
     let raw = to_pdf::extract::plain::extract(source.as_bytes());
     let lines: Vec<String> = raw
         .iter()
-        .map(|l| transcode_line(l, Unmappable::Escape).unwrap().0)
+        .map(|l| {
+            transcode_line(&expand_tabs(l, 4), Unmappable::Escape)
+                .unwrap()
+                .0
+        })
         .collect();
-    build(&paginate(&lines, &a4(), 4, false), &opts())
+    build(&paginate(&lines, &a4(), false), &opts())
 }
 
 fn inflate(b: &[u8]) -> Vec<u8> {
@@ -332,4 +336,15 @@ fn the_binary_exits_nonzero_when_a_file_fails() {
         .status()
         .unwrap();
     assert!(!status.success());
+}
+
+#[test]
+fn tab_indentation_becomes_spaces_not_an_escape_sequence() {
+    // Regression: transcoding ran before tab expansion, so every tab was
+    // escaped as \u{9} and the indentation of tab-indented files was destroyed.
+    let pdf = convert("def f():\n\tif x:\n\t\treturn 1\n");
+    assert_eq!(
+        page_text(&pdf, 0),
+        vec!["def f():", "    if x:", "        return 1"]
+    );
 }

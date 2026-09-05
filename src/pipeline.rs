@@ -101,7 +101,11 @@ fn convert(job: &Job, cfg: &Config) -> Result<Outcome, String> {
     let mut escaped = false;
     let mut lines = Vec::with_capacity(raw.len());
     for l in raw {
-        let (line, touched) = encode::transcode_line(&l, cfg.unmappable).map_err(|c| {
+        // Tabs must become spaces *before* transcoding. A raw tab has no WinAnsi
+        // slot, so transcoding first escapes it as `\u{9}` and destroys the
+        // indentation of every tab-indented file.
+        let expanded = layout::expand_tabs(&l, cfg.tab_width);
+        let (line, touched) = encode::transcode_line(&expanded, cfg.unmappable).map_err(|c| {
             format!(
                 "unmappable character U+{:04X} (--on-unmappable=fail)",
                 c as u32
@@ -111,7 +115,7 @@ fn convert(job: &Job, cfg: &Config) -> Result<Outcome, String> {
         lines.push(line);
     }
 
-    let pages = layout::paginate(&lines, &cfg.geometry, cfg.tab_width, cfg.line_numbers);
+    let pages = layout::paginate(&lines, &cfg.geometry, cfg.line_numbers);
     let out = pdf::build(&pages, &cfg.pdf);
 
     if let Some(parent) = job.dst.parent() {
