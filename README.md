@@ -118,7 +118,7 @@ directories found during the walk, so `to_pdf .git` does what you asked.
 | `--tab-width <N>` | `4` | Tabs advance to the next tabstop, not a flat N spaces. |
 | `--line-numbers` | off | |
 | `--page-numbers` | off | |
-| `--on-unmappable <M>` | `escape` | `escape` \| `replace` \| `fail` — see below. |
+| `--on-unmappable <M>` | `escape` | `escape` \| `fold` \| `replace` \| `fail` — see below. |
 | `--ext <LIST>` | see above | Comma-separated; replaces the default set. |
 | `--no-ignore` | | Descend into hidden and vendor directories too. |
 | `--max-file-size <MB>` | `64` | Larger inputs are skipped, not attempted. |
@@ -128,3 +128,26 @@ directories found during the walk, so `to_pdf .git` does what you asked.
 
 A failing file never aborts the run. Failures are collected, printed at the
 end, and the exit code is 1 if any file failed.
+
+## Characters WinAnsi cannot hold
+
+No font program is ever embedded — that is most of why the output is small — so
+every glyph must exist in the base-14 Courier font under WinAnsiEncoding
+(CP1252). That covers Latin text, curly quotes, en and em dashes, `…`, `§` and
+the accented letters; it does not cover ligatures, CJK, Greek, arrows or emoji.
+`--on-unmappable` decides what happens to the rest:
+
+| Mode | `ﬁnd the ﬂoor` becomes | Use when |
+|---|---|---|
+| `escape` (default) | `\u{FB01}nd the \u{FB02}oor` | You want nothing lost. Ugly but reversible. |
+| `fold` | `find the floor` | Converting prose. ASCII spelling where one is unambiguous, escape where none is. |
+| `replace` | `?nd the ?oor` | The characters are decorative and you want them gone. Lossy. |
+| `fail` | the file is an error | Auditing which files are affected. |
+
+`fold` covers the Latin ligatures, the fixed-width and zero-width spaces EPUBs
+are full of, the non-breaking hyphen and friends, arrows, vulgar fractions and
+the common maths relations. It never guesses: a character with no unambiguous
+ASCII spelling falls back to an escape, so a `\u{...}` in folded output means
+the encoder had nothing honest to write, not that it gave up.
+
+Whatever the mode, the run reports which files were affected.

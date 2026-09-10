@@ -201,6 +201,7 @@ impl Summary {
         }
         let what = match mode {
             encode::Unmappable::Escape => "escaped as \\u{...}",
+            encode::Unmappable::Fold => "folded to ASCII, or escaped where no spelling fits",
             encode::Unmappable::Replace => "replaced with '?'",
             // Unreachable: under `fail` an offending file lands in `failed`.
             encode::Unmappable::Fail => "that WinAnsi cannot represent",
@@ -338,6 +339,20 @@ mod tests {
         let note = s.unmappable_notice(encode::Unmappable::Replace).unwrap();
         assert!(note.contains("replaced with '?'"), "got: {note}");
         assert!(!note.contains("\\u{"), "got: {note}");
+    }
+
+    #[test]
+    fn the_fold_notice_says_folded_rather_than_escaped() {
+        let root = scratch("foldnote", &[("a.py", "s = \"\u{FB01}\"\n")]);
+        let s = run_on(&[
+            root.to_str().unwrap(),
+            "--in-place",
+            "--on-unmappable",
+            "fold",
+        ]);
+        assert_eq!(s.escaped.len(), 1);
+        let note = s.unmappable_notice(encode::Unmappable::Fold).unwrap();
+        assert!(note.contains("folded"), "got: {note}");
     }
 
     #[test]

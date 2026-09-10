@@ -20,6 +20,7 @@ pub enum PageSize {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum UnmappableArg {
     Escape,
+    Fold,
     Replace,
     Fail,
 }
@@ -165,6 +166,7 @@ impl Cli {
     pub fn unmappable(&self) -> Unmappable {
         match self.on_unmappable {
             UnmappableArg::Escape => Unmappable::Escape,
+            UnmappableArg::Fold => Unmappable::Fold,
             UnmappableArg::Replace => Unmappable::Replace,
             UnmappableArg::Fail => Unmappable::Fail,
         }
@@ -256,6 +258,14 @@ mod tests {
         assert_eq!(
             parse(&["s", "--on-unmappable", "fail"]).unmappable(),
             Unmappable::Fail
+        );
+    }
+
+    #[test]
+    fn on_unmappable_accepts_fold() {
+        assert_eq!(
+            parse(&["s", "--on-unmappable", "fold"]).unmappable(),
+            Unmappable::Fold
         );
     }
 

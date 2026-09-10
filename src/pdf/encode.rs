@@ -7,6 +7,9 @@
 pub enum Unmappable {
     /// Render it as a visible, reversible `\u{XXXX}` escape. Lossless.
     Escape,
+    /// Spell it out in ASCII where an unambiguous spelling exists, and escape
+    /// whatever has none. Meant for prose: `fi` beats both `?` and an escape.
+    Fold,
     /// Substitute `?`. Smaller but lossy; opt-in only.
     Replace,
     /// Treat the file as an error.
@@ -42,10 +45,61 @@ pub fn winansi_byte(c: char) -> Option<u8> {
     }
 }
 
+/// ASCII spellings for non-CP1252 characters, sorted by code point.
+///
+/// Only unambiguous transliterations belong here. A character with no entry
+/// falls back to a visible escape, so a reader can always tell an ASCII
+/// spelling this table chose from text the encoder could not represent at all.
+/// Zero-width characters map to nothing: EPUBs are full of them and they carry
+/// nothing a fixed-pitch page can show.
+#[rustfmt::skip]
+const FOLD: &[(char, &str)] = &[
+    ('\u{0132}', "IJ"),  ('\u{0133}', "ij"),
+    // Every fixed-width space collapses to a plain one.
+    ('\u{2000}', " "),   ('\u{2001}', " "),   ('\u{2002}', " "),
+    ('\u{2003}', " "),   ('\u{2004}', " "),   ('\u{2005}', " "),
+    ('\u{2006}', " "),   ('\u{2007}', " "),   ('\u{2008}', " "),
+    ('\u{2009}', " "),   ('\u{200A}', " "),
+    ('\u{200B}', ""),    ('\u{200C}', ""),    ('\u{200D}', ""),
+    ('\u{2010}', "-"),   ('\u{2011}', "-"),   ('\u{2012}', "-"),
+    ('\u{2015}', "--"),  ('\u{201B}', "'"),   ('\u{201F}', "\""),
+    ('\u{2023}', "*"),   ('\u{2028}', " "),   ('\u{2029}', " "),
+    ('\u{202F}', " "),   ('\u{2032}', "'"),   ('\u{2033}', "\""),
+    ('\u{2034}', "'''"), ('\u{2043}', "-"),   ('\u{2044}', "/"),
+    ('\u{205F}', " "),   ('\u{2060}', ""),
+    ('\u{2153}', "1/3"), ('\u{2154}', "2/3"), ('\u{2155}', "1/5"),
+    ('\u{2156}', "2/5"), ('\u{2157}', "3/5"), ('\u{2158}', "4/5"),
+    ('\u{2159}', "1/6"), ('\u{215A}', "5/6"), ('\u{215B}', "1/8"),
+    ('\u{215C}', "3/8"), ('\u{215D}', "5/8"), ('\u{215E}', "7/8"),
+    ('\u{2190}', "<-"),  ('\u{2192}', "->"),  ('\u{2194}', "<->"),
+    ('\u{21D0}', "<="),  ('\u{21D2}', "=>"),  ('\u{21D4}', "<=>"),
+    ('\u{2212}', "-"),   ('\u{2215}', "/"),   ('\u{2248}', "~="),
+    ('\u{2260}', "!="),  ('\u{2264}', "<="),  ('\u{2265}', ">="),
+    ('\u{25AA}', "*"),   ('\u{25CF}', "*"),   ('\u{25E6}', "o"),
+    ('\u{3000}', " "),
+    // The Latin ligatures: the ones that cost whole words.
+    ('\u{FB00}', "ff"),  ('\u{FB01}', "fi"),  ('\u{FB02}', "fl"),
+    ('\u{FB03}', "ffi"), ('\u{FB04}', "ffl"), ('\u{FB05}', "ft"),
+    ('\u{FB06}', "st"),  ('\u{FEFF}', ""),
+];
+
+/// The ASCII spelling of `c`, if [`FOLD`] has one.
+fn fold(c: char) -> Option<&'static str> {
+    FOLD.binary_search_by_key(&c, |(k, _)| *k)
+        .ok()
+        .map(|i| FOLD[i].1)
+}
+
+/// The visible, reversible spelling of a character WinAnsi has no slot for.
+fn escaped(c: char) -> String {
+    format!("\\u{{{:X}}}", c as u32)
+}
+
 /// Rewrite `line` so every character is WinAnsi-representable.
 ///
-/// Returns the rewritten line and whether any character had to be escaped or
-/// replaced. Under [`Unmappable::Fail`] returns the first offending character.
+/// Returns the rewritten line and whether any character had to be escaped,
+/// folded or replaced. Under [`Unmappable::Fail`] returns the first offending
+/// character.
 pub fn transcode_line(line: &str, mode: Unmappable) -> Result<(String, bool), char> {
     let mut out = String::with_capacity(line.len());
     let mut touched = false;
@@ -56,7 +110,11 @@ pub fn transcode_line(line: &str, mode: Unmappable) -> Result<(String, bool), ch
         }
         touched = true;
         match mode {
-            Unmappable::Escape => out.push_str(&format!("\\u{{{:X}}}", c as u32)),
+            Unmappable::Escape => out.push_str(&escaped(c)),
+            Unmappable::Fold => match fold(c) {
+                Some(ascii) => out.push_str(ascii),
+                None => out.push_str(&escaped(c)),
+            },
             Unmappable::Replace => out.push('?'),
             Unmappable::Fail => return Err(c),
         }
@@ -120,6 +178,68 @@ mod tests {
         assert_eq!(winansi_byte('\t'), None);
         assert_eq!(winansi_byte('\u{4E2D}'), None);
         assert_eq!(winansi_byte('\u{1F600}'), None);
+    }
+
+    #[test]
+    fn fold_spells_ligatures_out_in_ascii() {
+        let (out, touched) =
+            transcode_line("He could not \u{FB01}nd the \u{FB02}oor", Unmappable::Fold).unwrap();
+        assert_eq!(out, "He could not find the floor");
+        assert!(touched);
+    }
+
+    #[test]
+    fn fold_drops_zero_width_characters_entirely() {
+        let (out, _) = transcode_line("wo\u{200B}rd\u{FEFF}", Unmappable::Fold).unwrap();
+        assert_eq!(out, "word");
+    }
+
+    #[test]
+    fn fold_normalises_unicode_spaces_and_hyphens() {
+        let (out, _) = transcode_line("re\u{2011}read\u{2009}now", Unmappable::Fold).unwrap();
+        assert_eq!(out, "re-read now");
+    }
+
+    #[test]
+    fn fold_falls_back_to_an_escape_when_it_has_no_spelling() {
+        let (out, touched) = transcode_line("\u{4E2D}\u{1F600}", Unmappable::Fold).unwrap();
+        assert_eq!(out, "\\u{4E2D}\\u{1F600}");
+        assert!(touched);
+    }
+
+    #[test]
+    fn fold_leaves_winansi_characters_untouched() {
+        let line = "caf\u{E9} \u{201C}why\u{201D} \u{2014} 50\u{20AC}";
+        let (out, touched) = transcode_line(line, Unmappable::Fold).unwrap();
+        assert_eq!(out, line);
+        assert!(!touched, "nothing here needs folding");
+    }
+
+    #[test]
+    fn every_fold_replacement_is_representable_in_winansi() {
+        for (from, to) in FOLD {
+            assert!(
+                winansi_byte(*from).is_none(),
+                "U+{:04X} is already mappable and needs no fold",
+                *from as u32
+            );
+            for c in to.chars() {
+                assert!(
+                    winansi_byte(c).is_some(),
+                    "the fold for U+{:04X} emits unmappable {c:?}",
+                    *from as u32
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_fold_table_is_sorted_and_free_of_duplicates() {
+        let keys: Vec<char> = FOLD.iter().map(|(c, _)| *c).collect();
+        let mut sorted = keys.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(keys, sorted, "FOLD must stay sorted and duplicate-free");
     }
 
     #[test]
