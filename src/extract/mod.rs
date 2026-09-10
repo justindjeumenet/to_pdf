@@ -1,7 +1,6 @@
 //! Per-format text extraction. Every extractor returns plain lines and knows
 //! nothing about pages, columns, or PDF.
 
-pub mod epub;
 pub mod html;
 pub mod plain;
 
@@ -19,13 +18,12 @@ use std::path::Path;
 #[rustfmt::skip]
 pub const DEFAULT_EXTS: &[&str] = &[
     "c",     "cc",    "cfg",   "cjs",   "cpp",   "cs",    "css",
-    "csv",   "cts",   "dockerfile",     "epub",  "go",    "h",
-    "hpp",   "htm",   "html",  "in",    "ini",   "ipynb", "java",
-    "js",    "json",  "jsx",   "kt",    "lua",   "makefile",
-    "markdown",       "md",    "mjs",   "mk",    "mts",   "php",
-    "py",    "qmd",   "rb",    "rs",    "rst",   "scss",  "sh",
-    "sql",   "swift", "toml",  "ts",    "tsx",   "txt",   "xml",
-    "yaml",  "yml",
+    "csv",   "cts",   "dockerfile", "go",    "h",     "hpp",   "htm",
+    "html",  "in",    "ini",   "ipynb", "java",  "js",    "json",
+    "jsx",   "kt",    "lua",   "makefile", "markdown", "md",    "mjs",
+    "mk",    "mts",   "php",   "py",    "qmd",   "rb",    "rs",
+    "rst",   "scss",  "sh",    "sql",   "swift", "toml",  "ts",
+    "tsx",   "txt",   "xml",   "yaml",  "yml",
 ];
 
 /// Extract `bytes` according to `path`'s extension. Anything unrecognised is
@@ -38,7 +36,10 @@ pub fn extract(path: &Path, bytes: &[u8]) -> Result<Vec<String>, String> {
         .to_ascii_lowercase();
     match ext.as_str() {
         "html" | "htm" => Ok(html::extract(bytes)),
-        "epub" => epub::extract(bytes),
+        // Refused rather than skipped: reaching here means `--ext` named epub
+        // explicitly, and typesetting the zip container as text would produce
+        // pages of binary noise instead of a book.
+        "epub" => Err("EPUB is not supported; convert it with an ebook tool first".into()),
         _ => Ok(plain::extract(bytes)),
     }
 }
@@ -55,6 +56,17 @@ mod tests {
     }
 
     #[test]
+    fn epub_is_refused_even_when_ext_forces_it() {
+        let e = extract(Path::new("book.epub"), b"PK\x03\x04").unwrap_err();
+        assert!(e.contains("EPUB"), "got: {e}");
+    }
+
+    #[test]
+    fn the_epub_refusal_is_case_insensitive() {
+        assert!(extract(Path::new("BOOK.EPUB"), b"PK").is_err());
+    }
+
+    #[test]
     fn unknown_extensions_fall_back_to_plain_text() {
         let out = extract(Path::new("notes.conf"), b"k = v\n").unwrap();
         assert_eq!(out, vec!["k = v"]);
@@ -64,7 +76,7 @@ mod tests {
     fn default_extension_set_covers_the_common_source_families() {
         for e in [
             // the originally specified ten
-            "js", "ts", "go", "rs", "py", "txt", "md", "markdown", "html", "epub",
+            "js", "ts", "go", "rs", "py", "txt", "md", "markdown", "html",
             // siblings that were silently missed
             "jsx", "tsx", "mjs", "cjs", "mts", "cts", "htm", "qmd", "rst", "css", "scss", "json",
             "yaml", "yml", "toml", "ini", "cfg", "sh", "sql", "xml", "lua", "rb", "java", "c", "h",
@@ -90,7 +102,7 @@ mod tests {
     #[test]
     fn binary_and_data_formats_are_never_defaults() {
         for e in [
-            "png", "jpg", "gif", "svg", "pdf", "zip", "jsonl", "eval", "so", "dylib",
+            "png", "jpg", "gif", "svg", "pdf", "zip", "epub", "jsonl", "eval", "so", "dylib",
         ] {
             assert!(!DEFAULT_EXTS.contains(&e), "{e} must not be a default");
         }

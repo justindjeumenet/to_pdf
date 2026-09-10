@@ -60,7 +60,7 @@ to_pdf api web -o out
 `.js` `.jsx` `.kt` `.lua` `.mjs` `.mts` `.php` `.py` `.rb` `.rs` `.sh` `.sql`
 `.swift` `.ts` `.tsx`
 
-**Markup and prose** — `.css` `.epub` `.htm` `.html` `.markdown` `.md` `.qmd`
+**Markup and prose** — `.css` `.htm` `.html` `.markdown` `.md` `.qmd`
 `.rst` `.scss` `.txt` `.xml`
 
 **Configuration** — `.cfg` `.ini` `.json` `.toml` `.yaml` `.yml`
@@ -102,8 +102,6 @@ directories found during the walk, so `to_pdf .git` does what you asked.
   Rendering it would mean changing it, which rule 2 forbids.
 - **HTML** is reduced to text: scripts, styles, and images dropped; entities
   decoded; `<pre>` whitespace preserved.
-- **EPUB** chapters are extracted in spine (reading) order. Images and cover
-  art are dropped — they would dominate the file size.
 
 ### Options
 
@@ -144,9 +142,9 @@ the accented letters; it does not cover ligatures, CJK, Greek, arrows or emoji.
 | `replace` | `?nd the ?oor` | The characters are decorative and you want them gone. Lossy. |
 | `fail` | the file is an error | Auditing which files are affected. |
 
-`fold` covers the Latin ligatures, the fixed-width and zero-width spaces EPUBs
-are full of, the non-breaking hyphen and friends, arrows, vulgar fractions and
-the common maths relations. It never guesses: a character with no unambiguous
+`fold` covers the Latin ligatures, the fixed-width and zero-width spaces that
+word processors leave behind, the non-breaking hyphen and friends, arrows,
+vulgar fractions and the common maths relations. It never guesses: a character with no unambiguous
 ASCII spelling falls back to an escape, so a `\u{...}` in folded output means
 the encoder had nothing honest to write, not that it gave up.
 

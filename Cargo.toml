@@ -15,10 +15,6 @@ path = "src/main.rs"
 flate2 = "1"
 rayon = "1"
 clap = { version = "4", features = ["derive"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
-
-[dev-dependencies]
-zip = { version = "2", default-features = false }
 
 [profile.release]
 opt-level = 3

@@ -297,12 +297,12 @@ mod tests {
     }
 
     #[test]
-    fn a_bad_epub_fails_that_file_without_aborting_the_run() {
+    fn epub_inputs_are_skipped_as_unsupported() {
         let root = scratch("bad", &[("a.rs", "1\n"), ("b.epub", "not a zip\n")]);
         let s = run_on(&[root.to_str().unwrap(), "--in-place"]);
         assert_eq!(s.converted, 1);
-        assert_eq!(s.failed.len(), 1);
-        assert!(s.failed[0].0.ends_with("b.epub"));
+        assert!(s.failed.is_empty());
+        assert!(matches!(s.skipped[0], Skip::UnsupportedExt(ref p) if p.ends_with("b.epub")));
     }
 
     #[test]
@@ -374,6 +374,15 @@ mod tests {
         assert_eq!(s.converted, 0);
         assert_eq!(s.failed.len(), 1);
         assert!(s.failed[0].1.contains("U+1F600"), "got: {}", s.failed[0].1);
+    }
+
+    #[test]
+    fn forcing_ext_epub_fails_rather_than_typesetting_zip_bytes() {
+        let root = scratch("forced", &[("b.epub", "PK\u{3}\u{4}binary")]);
+        let s = run_on(&[root.to_str().unwrap(), "--in-place", "--ext", "epub"]);
+        assert_eq!(s.converted, 0);
+        assert_eq!(s.failed.len(), 1);
+        assert!(s.failed[0].1.contains("EPUB"), "got: {}", s.failed[0].1);
     }
 
     #[test]

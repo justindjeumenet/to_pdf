@@ -237,7 +237,8 @@ mod tests {
     fn the_default_extension_set_is_used_when_ext_is_absent() {
         let e = parse(&["src"]).extensions();
         assert_eq!(e.len(), DEFAULT_EXTS.len());
-        assert!(e.contains("rs") && e.contains("epub") && e.contains("markdown"));
+        assert!(e.contains("rs") && e.contains("markdown"));
+        assert!(!e.contains("epub"), "epub support was removed");
     }
 
     #[test]
