@@ -13,7 +13,8 @@ pub struct Summary {
     pub converted: usize,
     pub bytes_in: u64,
     pub bytes_out: u64,
-    pub escaped_files: usize,
+    /// Files in which at least one character had no WinAnsi slot, in job order.
+    pub escaped: Vec<PathBuf>,
     pub failed: Vec<(PathBuf, String)>,
     pub skipped: Vec<Skip>,
 }
@@ -87,7 +88,9 @@ pub fn run(cli: &Cli) -> Summary {
                 summary.converted += 1;
                 summary.bytes_in += o.bytes_in;
                 summary.bytes_out += o.bytes_out;
-                summary.escaped_files += usize::from(o.escaped);
+                if o.escaped {
+                    summary.escaped.push(src);
+                }
             }
             Err(e) => summary.failed.push((src, e)),
         }
@@ -132,7 +135,7 @@ fn convert(job: &Job, cfg: &Config) -> Result<Outcome, String> {
 }
 
 impl Summary {
-    pub fn report(&self, quiet: bool, verbose: bool) {
+    pub fn report(&self, quiet: bool, verbose: bool, mode: encode::Unmappable) {
         if verbose {
             for s in &self.skipped {
                 match s {
@@ -181,12 +184,35 @@ impl Summary {
             human(self.bytes_in),
             human(self.bytes_out),
         );
-        if self.escaped_files > 0 {
-            println!(
-                "{} file(s) contained characters escaped as \\u{{...}}",
-                self.escaped_files
-            );
+        if let Some(note) = self.unmappable_notice(mode) {
+            println!("{note}");
         }
+    }
+
+    /// The trailing notice about characters WinAnsi could not represent, naming
+    /// each affected file. `None` when everything mapped cleanly.
+    ///
+    /// The wording has to come from `mode`: the same files are recorded whether
+    /// their characters were escaped or replaced, so only the mode says which
+    /// actually happened.
+    pub fn unmappable_notice(&self, mode: encode::Unmappable) -> Option<String> {
+        if self.escaped.is_empty() {
+            return None;
+        }
+        let what = match mode {
+            encode::Unmappable::Escape => "escaped as \\u{...}",
+            encode::Unmappable::Replace => "replaced with '?'",
+            // Unreachable: under `fail` an offending file lands in `failed`.
+            encode::Unmappable::Fail => "that WinAnsi cannot represent",
+        };
+        let mut note = format!(
+            "{} file(s) contained characters {what}:",
+            self.escaped.len()
+        );
+        for p in &self.escaped {
+            note.push_str(&format!("\n  {}", p.display()));
+        }
+        Some(note)
     }
 }
 
@@ -279,14 +305,46 @@ mod tests {
     }
 
     #[test]
-    fn escaped_files_are_counted() {
+    fn escaped_files_are_recorded_by_path() {
         let root = scratch(
             "esc",
             &[("a.py", "s = \"\u{1F600}\"\n"), ("b.py", "s = 1\n")],
         );
         let s = run_on(&[root.to_str().unwrap(), "--in-place"]);
         assert_eq!(s.converted, 2);
-        assert_eq!(s.escaped_files, 1);
+        assert_eq!(s.escaped.len(), 1);
+        assert!(s.escaped[0].ends_with("a.py"), "got: {:?}", s.escaped);
+    }
+
+    #[test]
+    fn the_escape_notice_names_every_affected_file() {
+        let root = scratch("escnote", &[("a.py", "s = \"\u{1F600}\"\n")]);
+        let s = run_on(&[root.to_str().unwrap(), "--in-place"]);
+        let note = s.unmappable_notice(encode::Unmappable::Escape).unwrap();
+        assert!(note.contains("escaped as \\u{...}"), "got: {note}");
+        assert!(note.contains("a.py"), "got: {note}");
+    }
+
+    #[test]
+    fn the_replace_notice_says_replaced_rather_than_escaped() {
+        let root = scratch("repnote", &[("a.py", "s = \"\u{1F600}\"\n")]);
+        let s = run_on(&[
+            root.to_str().unwrap(),
+            "--in-place",
+            "--on-unmappable",
+            "replace",
+        ]);
+        assert_eq!(s.escaped.len(), 1);
+        let note = s.unmappable_notice(encode::Unmappable::Replace).unwrap();
+        assert!(note.contains("replaced with '?'"), "got: {note}");
+        assert!(!note.contains("\\u{"), "got: {note}");
+    }
+
+    #[test]
+    fn a_clean_run_produces_no_unmappable_notice() {
+        let root = scratch("clean", &[("a.py", "s = 1\n")]);
+        let s = run_on(&[root.to_str().unwrap(), "--in-place"]);
+        assert!(s.unmappable_notice(encode::Unmappable::Escape).is_none());
     }
 
     #[test]
